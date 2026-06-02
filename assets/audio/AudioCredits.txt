@@ -1,0 +1,22 @@
+Audio Sources
+=============
+
+All bundled audio is released under Creative Commons Zero (CC0).
+
+Background music
+----------------
+"Cozy Puzzle In-Game 1" by MintoDog
+https://opengameart.org/content/cozy-puzzle-in-game-1
+Bundled file: row_echelon_music.mp3
+
+Interface sound effects
+-----------------------
+"51 UI sound effects (buttons, switches and clicks)" by Kenney
+https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks
+Bundled files: ui_tap.wav, ui_row.wav, ui_apply.wav, ui_reset.wav
+
+Level completion sound
+----------------------
+"Cozy Puzzle Jingle & Result" by MintoDog
+https://opengameart.org/content/cozy-puzzle-jingle-result
+Bundled file: ui_complete.mp3

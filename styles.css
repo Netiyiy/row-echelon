@@ -1,0 +1,466 @@
+:root {
+  color-scheme: dark;
+  --cream: #fae6bf;
+  --muted-cream: #c7a37d;
+  --cocoa: #4a3026;
+  --panel: #5c3d30;
+  --panel-raised: #6e4a3a;
+  --accent: #e09e5c;
+  --accent-soft: #a36e4f;
+  --success: #c7d18c;
+  font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
+  background: var(--cocoa);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: #352219;
+}
+
+body {
+  min-height: 100svh;
+  overscroll-behavior: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.game-shell {
+  isolation: isolate;
+  position: relative;
+  width: min(100%, 460px);
+  min-height: 100svh;
+  margin: 0 auto;
+  overflow: hidden;
+  padding:
+    calc(env(safe-area-inset-top) + 27px)
+    max(20px, 6vw)
+    calc(env(safe-area-inset-bottom) + 54px);
+  color: var(--cream);
+  background: var(--cocoa);
+}
+
+.top-glow {
+  position: absolute;
+  z-index: -1;
+  top: 85px;
+  left: 50%;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: rgb(102 69 54 / 42%);
+  transform: translateX(-50%);
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  color: var(--cream);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.title-block {
+  margin-top: 40px;
+  text-align: center;
+}
+
+h1 {
+  margin: 0;
+  color: var(--cream);
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.title-block p {
+  margin: 5px 0 0;
+  color: var(--muted-cream);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.matrix-stage {
+  position: relative;
+  min-height: 232px;
+  margin-top: 36px;
+  padding: 23px 12px;
+  border: 1px solid rgb(163 110 79 / 78%);
+  border-radius: 22px;
+  background: rgb(92 61 48 / 94%);
+  box-shadow:
+    0 5px 0 rgb(0 0 0 / 14%),
+    0 28px 28px -30px rgb(224 158 92 / 60%);
+}
+
+.matrix {
+  display: grid;
+  gap: 10px;
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 54px;
+  min-height: 54px;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 1px solid rgb(163 110 79 / 72%);
+  border-radius: 14px;
+  color: var(--cream);
+  background: var(--panel-raised);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.matrix-row.selected {
+  border-color: var(--accent);
+  background: rgb(224 158 92 / 42%);
+}
+
+.matrix-row.slot-active {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+  animation: slot-card-pulse 300ms ease-out;
+}
+
+.matrix-row.row-solved {
+  animation: solved-row-glow 580ms ease-out;
+}
+
+.matrix-value {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  overflow: hidden;
+  color: var(--cream);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.matrix-value:last-child {
+  border-left: 1px solid rgb(199 163 125 / 58%);
+}
+
+.slot-window {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.slot-reel {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.14, 0.72, 0.24, 1);
+}
+
+.slot-item {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.sparkle-layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sparkle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--sparkle-size);
+  height: var(--sparkle-size);
+  opacity: 0;
+  background: var(--sparkle-color);
+  clip-path: polygon(50% 0%, 59% 41%, 100% 50%, 59% 59%, 50% 100%, 41% 59%, 0% 50%, 41% 41%);
+  animation: sparkle-burst 1.24s ease-out var(--sparkle-delay) forwards;
+}
+
+.control-card {
+  margin-top: 42px;
+  padding: 14px;
+  border: 1px solid rgb(163 110 79 / 72%);
+  border-radius: 18px;
+  background: rgb(92 61 48 / 94%);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted-cream);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.operation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.operation-button,
+.factor-input {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--cream);
+  background: var(--panel-raised);
+  font-weight: 700;
+}
+
+.operation-button {
+  min-height: 34px;
+  font-size: 12px;
+}
+
+.operation-button.active {
+  color: var(--cocoa);
+  background: var(--accent);
+}
+
+.factor-line {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 0;
+  margin-top: 10px;
+}
+
+.factor-input {
+  width: 100%;
+  min-height: 32px;
+  border-color: var(--accent-soft);
+  outline: none;
+  font-size: 15px;
+  text-align: center;
+}
+
+.factor-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(224 158 92 / 22%);
+}
+
+.factor-input.invalid {
+  border-color: var(--success);
+}
+
+.level-cleared {
+  min-height: 14px;
+  margin: 15px 0 0;
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+}
+
+.reset-button {
+  position: absolute;
+  right: max(20px, 6vw);
+  bottom: calc(env(safe-area-inset-bottom) + 18px);
+  width: 48px;
+  height: 22px;
+  border: 1px solid rgb(163 110 79 / 55%);
+  border-radius: 7px;
+  color: var(--muted-cream);
+  background: rgb(92 61 48 / 76%);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.game-shell.celebrating button,
+.game-shell.celebrating input {
+  pointer-events: none;
+}
+
+@keyframes slot-card-pulse {
+  0% {
+    transform: scale(1);
+  }
+  46% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes solved-row-glow {
+  0% {
+    border-color: var(--success);
+    background: rgb(199 209 140 / 24%);
+    box-shadow: 0 0 0 0 rgb(199 209 140 / 60%);
+  }
+  100% {
+    border-color: rgb(163 110 79 / 72%);
+    background: var(--panel-raised);
+    box-shadow: 0 0 0 10px rgb(199 209 140 / 0%);
+  }
+}
+
+@keyframes sparkle-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.25) rotate(0);
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform:
+      translate(
+        calc(-50% + var(--sparkle-x)),
+        calc(-50% + var(--sparkle-y))
+      )
+      scale(1)
+      rotate(var(--sparkle-rotation));
+  }
+}
+
+@media (min-height: 900px) {
+  .game-shell {
+    padding-top: calc(env(safe-area-inset-top) + 34px);
+  }
+
+  .title-block {
+    margin-top: 48px;
+  }
+
+  .matrix-stage {
+    margin-top: 42px;
+  }
+
+  .control-card {
+    margin-top: 48px;
+  }
+}
+
+@media (min-width: 800px) {
+  .game-shell {
+    width: 100%;
+    min-height: 100svh;
+    padding:
+      38px
+      clamp(42px, 7vw, 82px)
+      44px;
+  }
+
+  .top-glow {
+    top: 142px;
+    left: 50%;
+    width: min(70vw, 760px);
+    height: min(70vw, 760px);
+  }
+
+  .hud {
+    font-size: 12px;
+  }
+
+  .title-block {
+    margin-top: 55px;
+  }
+
+  h1 {
+    font-size: 42px;
+  }
+
+  .title-block p {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
+  .matrix-stage {
+    width: min(78vw, 940px);
+    min-height: 314px;
+    margin-top: 48px;
+    margin-right: auto;
+    margin-left: auto;
+    padding: 31px 22px;
+    border-radius: 25px;
+  }
+
+  .matrix {
+    gap: 15px;
+  }
+
+  .matrix-row {
+    height: 74px;
+    min-height: 74px;
+    border-radius: 15px;
+  }
+
+  .matrix-value {
+    font-size: 23px;
+  }
+
+  .control-card {
+    width: min(56vw, 620px);
+    margin: 30px auto 0;
+    padding: 19px;
+    border-radius: 20px;
+  }
+
+  .eyebrow {
+    font-size: 10px;
+  }
+
+  .operation-grid {
+    gap: 9px;
+    margin-top: 12px;
+  }
+
+  .operation-button {
+    min-height: 43px;
+    font-size: 13px;
+  }
+
+  .factor-line {
+    grid-template-columns: 68px 1fr;
+    margin-top: 14px;
+  }
+
+  .factor-input {
+    min-height: 41px;
+    font-size: 17px;
+  }
+
+  .level-cleared {
+    min-height: 18px;
+    margin-top: 24px;
+    font-size: 12px;
+  }
+
+  .reset-button {
+    right: clamp(42px, 7vw, 82px);
+    bottom: 24px;
+  }
+}

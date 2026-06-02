@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#4a3026" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Row Echelon" />
+    <title>Row Echelon</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+    <link rel="stylesheet" href="styles.css?v=5" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="Row Echelon game">
+      <div class="top-glow" aria-hidden="true"></div>
+
+      <header class="hud">
+        <span id="current-time">TIME 00:00</span>
+        <span id="best-time">BEST --:--</span>
+      </header>
+
+      <section class="title-block">
+        <h1>Row Echelon</h1>
+        <p id="level-label">LEVEL 1</p>
+      </section>
+
+      <section id="matrix-stage" class="matrix-stage" aria-label="Augmented matrix">
+        <div id="matrix" class="matrix"></div>
+        <div id="sparkle-layer" class="sparkle-layer" aria-hidden="true"></div>
+      </section>
+
+      <section class="control-card" aria-label="Row operations">
+        <p class="eyebrow">ROW OPERATION</p>
+        <div class="operation-grid">
+          <button class="operation-button" type="button" data-mode="swap">Swap</button>
+          <button class="operation-button active" type="button" data-mode="add">Add</button>
+          <button class="operation-button" type="button" data-mode="scale">Scale</button>
+        </div>
+        <div class="factor-line">
+          <label class="eyebrow" for="factor-input">FACTOR</label>
+          <input
+            id="factor-input"
+            class="factor-input"
+            name="factor"
+            value="-1"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Factor"
+          />
+        </div>
+      </section>
+
+      <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
+      <button id="reset-button" class="reset-button" type="button">RESET</button>
+    </main>
+
+    <script src="app.js?v=3" defer></script>
+  </body>
+</html>
