@@ -93,6 +93,7 @@ const wait = (duration) => new Promise((resolve) => window.setTimeout(resolve, d
 const randomInt = (minimum, maximum) =>
   Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
 const choose = (values) => values[randomInt(0, values.length - 1)];
+const nonZeroSmallInt = () => choose([-3, -2, -1, 1, 2, 3]);
 const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
 
@@ -168,9 +169,8 @@ const state = {
   factor: fraction(-1),
   selectedRow: null,
   isSolved: false,
-  elapsedTime: 0,
-  levelStartedAt: performance.now(),
-  bestTime: Number(localStorage.getItem("rowEchelonBestTime")) || null,
+  steps: 0,
+  bestSteps: Number(localStorage.getItem("rowEchelonBestSteps")) || null,
   celebrationToken: 0,
 };
 
@@ -180,8 +180,8 @@ function intMatrix(values) {
 
 function randomEchelonMatrix() {
   return intMatrix([
-    [1, randomInt(-3, 3), randomInt(-3, 3), randomInt(-4, 4)],
-    [0, 1, randomInt(-3, 3), randomInt(-4, 4)],
+    [1, nonZeroSmallInt(), nonZeroSmallInt(), randomInt(-4, 4)],
+    [0, 1, nonZeroSmallInt(), randomInt(-4, 4)],
     [0, 0, 1, randomInt(-4, 4)],
   ]);
 }
@@ -211,30 +211,30 @@ function generateMatrix(level) {
     const valuesStayReadable = candidate
       .flat()
       .every((value) => Math.abs(value.numerator) <= 60);
-    if (valuesStayReadable && !isRowEchelonForm(candidate)) return candidate;
+    if (valuesStayReadable && !isGameSolved(candidate)) return candidate;
   }
 
   return intMatrix([
     [1, 2, -1, 3],
-    [2, 4, 1, 9],
-    [-1, -2, 2, 0],
+    [0, 1, 2, -1],
+    [0, 0, 1, 4],
   ]);
 }
 
-function isRowEchelonForm(matrix) {
-  let previousPivot = -1;
-  let sawZeroRow = false;
+function isOne(value) {
+  return value.numerator === 1 && value.denominator === 1;
+}
 
-  for (const row of matrix) {
-    const pivot = row.findIndex((value) => !value.isZero);
-    if (pivot === -1) {
-      sawZeroRow = true;
-      continue;
-    }
-    if (sawZeroRow || pivot <= previousPivot) return false;
-    previousPivot = pivot;
-  }
-  return true;
+function isGameSolved(matrix) {
+  if (!matrix.length) return false;
+  const coefficientColumns = matrix[0].length - 1;
+  if (matrix.length !== coefficientColumns) return false;
+
+  return matrix.every((row, rowIndex) =>
+    row.slice(0, coefficientColumns).every((value, columnIndex) =>
+      columnIndex === rowIndex ? isOne(value) : value.isZero,
+    ),
+  );
 }
 
 function reducedRowEchelonForm(source) {
@@ -262,14 +262,9 @@ function reducedRowEchelonForm(source) {
   return values;
 }
 
-function formattedTime(time) {
-  const seconds = Math.max(0, Math.floor(time));
-  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function updateTimerLabels() {
-  $("#current-time").textContent = `TIME ${formattedTime(state.elapsedTime)}`;
-  $("#best-time").textContent = `BEST ${state.bestTime ? formattedTime(state.bestTime) : "--:--"}`;
+function updateScoreLabels() {
+  $("#current-score").textContent = `STEPS ${state.steps}`;
+  $("#best-score").textContent = `BEST ${state.bestSteps ?? "--"}`;
 }
 
 function renderMatrix() {
@@ -312,7 +307,7 @@ function render() {
   $(".game-shell").classList.toggle("celebrating", state.isSolved);
   renderMatrix();
   renderControls();
-  updateTimerLabels();
+  updateScoreLabels();
 }
 
 function startLevel(level) {
@@ -325,8 +320,7 @@ function startLevel(level) {
   state.factor = fraction(-1);
   state.selectedRow = null;
   state.isSolved = false;
-  state.elapsedTime = 0;
-  state.levelStartedAt = performance.now();
+  state.steps = 0;
   $("#sparkle-layer").replaceChildren();
   render();
 }
@@ -334,8 +328,9 @@ function startLevel(level) {
 function applyChange(change) {
   state.history.push(cloneMatrix(state.matrix));
   change();
+  state.steps += 1;
   state.selectedRow = null;
-  state.isSolved = isRowEchelonForm(state.matrix);
+  state.isSolved = isGameSolved(state.matrix);
   render();
   if (state.isSolved) completeLevel();
 }
@@ -384,18 +379,16 @@ function resetLevel() {
   state.history = [];
   state.selectedRow = null;
   state.isSolved = false;
-  state.elapsedTime = 0;
-  state.levelStartedAt = performance.now();
+  state.steps = 0;
   render();
 }
 
 async function completeLevel() {
-  state.elapsedTime = (performance.now() - state.levelStartedAt) / 1000;
-  if (!state.bestTime || state.elapsedTime < state.bestTime) {
-    state.bestTime = state.elapsedTime;
-    localStorage.setItem("rowEchelonBestTime", String(state.bestTime));
+  if (!state.bestSteps || state.steps < state.bestSteps) {
+    state.bestSteps = state.steps;
+    localStorage.setItem("rowEchelonBestSteps", String(state.bestSteps));
   }
-  updateTimerLabels();
+  updateScoreLabels();
   audio.play("complete");
 
   const token = ++state.celebrationToken;
@@ -531,11 +524,6 @@ $("#factor-input").addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("pointerdown", () => audio.startMusic(), { once: true });
-window.setInterval(() => {
-  if (state.isSolved) return;
-  state.elapsedTime = (performance.now() - state.levelStartedAt) / 1000;
-  updateTimerLabels();
-}, 250);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
