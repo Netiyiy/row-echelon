@@ -10,15 +10,15 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
       <div class="top-glow" aria-hidden="true"></div>
 
       <header class="hud">
-        <span id="current-time">TIME 00:00</span>
-        <span id="best-time">BEST --:--</span>
+        <span id="current-score">STEPS 0</span>
+        <span id="best-score">BEST --</span>
       </header>
 
       <section class="title-block">
@@ -55,9 +55,10 @@
       </section>
 
       <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
+      <span class="version-label" aria-label="Version">v9</span>
       <button id="reset-button" class="reset-button" type="button">RESET</button>
     </main>
 
-    <script src="app.js?v=3" defer></script>
+    <script src="app.js?v=5" defer></script>
   </body>
 </html>
