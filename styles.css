@@ -296,6 +296,16 @@ h1 {
   letter-spacing: 0.08em;
 }
 
+.version-label {
+  position: absolute;
+  left: max(20px, 6vw);
+  bottom: calc(env(safe-area-inset-bottom) + 22px);
+  color: rgb(199 163 125 / 72%);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
 .game-shell.celebrating button,
 .game-shell.celebrating input {
   pointer-events: none;
@@ -462,5 +472,10 @@ h1 {
   .reset-button {
     right: clamp(42px, 7vw, 82px);
     bottom: 24px;
+  }
+
+  .version-label {
+    left: clamp(42px, 7vw, 82px);
+    bottom: 28px;
   }
 }
