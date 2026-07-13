@@ -10,11 +10,23 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=8" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
       <div class="top-glow" aria-hidden="true"></div>
+      <button id="settings-button" class="settings-button" type="button" aria-expanded="false">
+        SET
+      </button>
+
+      <section id="settings-panel" class="settings-panel" aria-label="Settings" hidden>
+        <p class="eyebrow">INPUT</p>
+        <div class="input-mode-grid">
+          <button class="input-mode-button" type="button" data-input-mode="keyboard">Keyboard</button>
+          <button class="input-mode-button" type="button" data-input-mode="keypad">Keypad</button>
+          <button class="input-mode-button" type="button" data-input-mode="radial">Radial</button>
+        </div>
+      </section>
 
       <header class="hud">
         <span id="current-score">STEPS 0</span>
@@ -52,13 +64,52 @@
             aria-label="Factor"
           />
         </div>
+
+        <div id="numeric-tools" class="numeric-tools" hidden>
+          <div class="edit-controls" aria-label="Edit factor">
+            <button id="backspace-button" class="edit-button" type="button">BACK</button>
+            <button id="clear-button" class="edit-button" type="button">CLEAR</button>
+          </div>
+
+          <section id="keypad-panel" class="input-panel keypad-panel" aria-label="Phone keypad" hidden>
+            <div class="keypad-grid">
+              <button class="keypad-button" type="button" data-digit="1">1</button>
+              <button class="keypad-button" type="button" data-digit="2">2</button>
+              <button class="keypad-button" type="button" data-digit="3">3</button>
+              <button class="keypad-button" type="button" data-digit="4">4</button>
+              <button class="keypad-button" type="button" data-digit="5">5</button>
+              <button class="keypad-button" type="button" data-digit="6">6</button>
+              <button class="keypad-button" type="button" data-digit="7">7</button>
+              <button class="keypad-button" type="button" data-digit="8">8</button>
+              <button class="keypad-button" type="button" data-digit="9">9</button>
+              <button class="keypad-button zero" type="button" data-digit="0">0</button>
+            </div>
+          </section>
+
+          <section id="radial-panel" class="input-panel radial-panel" aria-label="Radial dial" hidden>
+            <div id="radial-dial" class="radial-dial" aria-label="Radial digit selector">
+              <span class="radial-pointer" aria-hidden="true"></span>
+              <span class="radial-digit" data-digit="0" style="--angle: 0deg">0</span>
+              <span class="radial-digit" data-digit="1" style="--angle: 36deg">1</span>
+              <span class="radial-digit" data-digit="2" style="--angle: 72deg">2</span>
+              <span class="radial-digit" data-digit="3" style="--angle: 108deg">3</span>
+              <span class="radial-digit" data-digit="4" style="--angle: 144deg">4</span>
+              <span class="radial-digit" data-digit="5" style="--angle: 180deg">5</span>
+              <span class="radial-digit" data-digit="6" style="--angle: 216deg">6</span>
+              <span class="radial-digit" data-digit="7" style="--angle: 252deg">7</span>
+              <span class="radial-digit" data-digit="8" style="--angle: 288deg">8</span>
+              <span class="radial-digit" data-digit="9" style="--angle: 324deg">9</span>
+              <span class="radial-center" aria-hidden="true"></span>
+            </div>
+          </section>
+        </div>
       </section>
 
       <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
-      <span class="version-label" aria-label="Version">v9</span>
+      <span class="version-label" aria-label="Version">v10</span>
       <button id="reset-button" class="reset-button" type="button">RESET</button>
     </main>
 
-    <script src="app.js?v=5" defer></script>
+    <script src="app.js?v=6" defer></script>
   </body>
 </html>

@@ -17,6 +17,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   width: 100%;
@@ -46,7 +50,8 @@ button {
   width: min(100%, 460px);
   min-height: 100svh;
   margin: 0 auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding:
     calc(env(safe-area-inset-top) + 27px)
     max(20px, 6vw)
@@ -74,6 +79,65 @@ button {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+.settings-button {
+  position: absolute;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: max(18px, 5vw);
+  min-width: 38px;
+  min-height: 26px;
+  border: 1px solid rgb(163 110 79 / 62%);
+  border-radius: 9px;
+  color: var(--muted-cream);
+  background: rgb(92 61 48 / 82%);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.settings-button.active,
+.settings-button:active {
+  color: var(--cocoa);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settings-panel {
+  position: absolute;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 42px);
+  right: max(18px, 5vw);
+  width: min(260px, calc(100% - 36px));
+  padding: 12px;
+  border: 1px solid rgb(163 110 79 / 72%);
+  border-radius: 15px;
+  background: rgb(72 46 36 / 96%);
+  box-shadow: 0 18px 32px rgb(0 0 0 / 22%);
+}
+
+.input-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.input-mode-button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--cream);
+  background: var(--panel-raised);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.input-mode-button.active,
+.input-mode-button:active {
+  color: var(--cocoa);
+  background: var(--accent);
 }
 
 .title-block {
@@ -227,7 +291,9 @@ h1 {
 }
 
 .operation-button,
-.factor-input {
+.factor-input,
+.edit-button,
+.keypad-button {
   border: 1px solid transparent;
   border-radius: 10px;
   color: var(--cream);
@@ -267,8 +333,158 @@ h1 {
   box-shadow: 0 0 0 2px rgb(224 158 92 / 22%);
 }
 
+.factor-input.readonly {
+  caret-color: transparent;
+  cursor: default;
+}
+
 .factor-input.invalid {
   border-color: var(--success);
+}
+
+.numeric-tools {
+  margin-top: 12px;
+}
+
+.edit-controls {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.edit-button {
+  min-height: 34px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.edit-button:hover,
+.keypad-button:hover,
+.input-mode-button:hover {
+  border-color: rgb(224 158 92 / 52%);
+}
+
+.edit-button:active,
+.keypad-button:active {
+  color: var(--cocoa);
+  background: var(--accent);
+  transform: translateY(1px);
+}
+
+.input-panel {
+  margin-top: 10px;
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.keypad-button {
+  min-height: 48px;
+  font-size: 19px;
+  touch-action: manipulation;
+}
+
+.keypad-button.zero {
+  grid-column: 1 / -1;
+}
+
+.radial-panel {
+  display: grid;
+  place-items: center;
+}
+
+.radial-dial {
+  --pointer-angle: 0deg;
+  --pointer-length: 0px;
+  position: relative;
+  width: min(245px, 72vw);
+  aspect-ratio: 1;
+  border: 1px solid rgb(163 110 79 / 68%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgb(224 158 92 / 18%) 0 17%, transparent 18%),
+    rgb(78 51 40 / 74%);
+  touch-action: none;
+  user-select: none;
+}
+
+.radial-dial.dragging {
+  border-color: var(--accent);
+}
+
+.radial-pointer {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: var(--pointer-length);
+  height: 4px;
+  border-radius: 999px;
+  opacity: 0;
+  background: var(--accent);
+  transform: translateY(-50%) rotate(var(--pointer-angle));
+  transform-origin: left center;
+}
+
+.radial-dial.has-target .radial-pointer {
+  opacity: 1;
+}
+
+.radial-center {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  border: 2px solid rgb(250 230 191 / 72%);
+  border-radius: 50%;
+  background: rgb(110 74 58 / 92%);
+  box-shadow: inset 0 0 0 8px rgb(224 158 92 / 12%);
+  transform: translate(-50%, -50%);
+}
+
+.radial-dial.dragging .radial-center {
+  border-color: var(--accent);
+  background: rgb(224 158 92 / 42%);
+}
+
+.radial-digit {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(163 110 79 / 56%);
+  border-radius: 50%;
+  color: var(--cream);
+  background: var(--panel-raised);
+  font-size: 14px;
+  font-weight: 800;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateY(-90px)
+    rotate(calc(-1 * var(--angle)));
+}
+
+.radial-digit.targeted {
+  color: var(--cocoa);
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 6px rgb(224 158 92 / 16%);
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateY(-90px)
+    rotate(calc(-1 * var(--angle)))
+    scale(1.12);
 }
 
 .level-cleared {

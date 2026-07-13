@@ -96,6 +96,9 @@ const choose = (values) => values[randomInt(0, values.length - 1)];
 const nonZeroSmallInt = () => choose([-3, -2, -1, 1, 2, 3]);
 const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
+const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+const INPUT_MODES = ["keyboard", "keypad", "radial"];
+const savedInputMode = localStorage.getItem("rowEchelonInputMode");
 
 class GameAudio {
   constructor() {
@@ -171,6 +174,11 @@ const state = {
   isSolved: false,
   steps: 0,
   bestSteps: Number(localStorage.getItem("rowEchelonBestSteps")) || null,
+  inputMode: INPUT_MODES.includes(savedInputMode) ? savedInputMode : "keyboard",
+  settingsOpen: false,
+  factorDraft: "-1",
+  radialPointerId: null,
+  radialTargetDigit: null,
   celebrationToken: 0,
 };
 
@@ -267,6 +275,73 @@ function updateScoreLabels() {
   $("#best-score").textContent = `BEST ${state.bestSteps ?? "--"}`;
 }
 
+function validateFactorInput({ restoreInvalid = false, clearSelection = false } = {}) {
+  const input = $("#factor-input");
+  state.factorDraft = input.value;
+  const value = Fraction.parse(state.factorDraft);
+
+  if (!value || value.isZero) {
+    input.classList.add("invalid");
+    input.setAttribute("aria-invalid", "true");
+    if (restoreInvalid) {
+      state.factorDraft = state.factor.toString();
+      input.value = state.factorDraft;
+      input.classList.remove("invalid");
+      input.removeAttribute("aria-invalid");
+    }
+    return false;
+  }
+
+  state.factor = value;
+  if (clearSelection) state.selectedRow = null;
+  input.classList.remove("invalid");
+  input.removeAttribute("aria-invalid");
+  return true;
+}
+
+function setFactorDraft(value, { playSound = false } = {}) {
+  if (state.isSolved) return;
+  if (playSound) audio.play("tap");
+  const input = $("#factor-input");
+  state.factorDraft = value;
+  input.value = state.factorDraft;
+  validateFactorInput({ clearSelection: true });
+  renderMatrix();
+}
+
+function appendFactorDigit(digit) {
+  if (!DIGITS.includes(digit)) return;
+  const input = $("#factor-input");
+  setFactorDraft(`${input.value}${digit}`, { playSound: true });
+}
+
+function backspaceFactorInput({ playSound = true } = {}) {
+  const input = $("#factor-input");
+  if (playSound) audio.play("tap");
+  setFactorDraft(input.value.slice(0, -1));
+}
+
+function clearFactorInput({ playSound = true } = {}) {
+  if (playSound) audio.play("tap");
+  setFactorDraft("");
+}
+
+function setInputMode(mode) {
+  if (!INPUT_MODES.includes(mode)) return;
+  state.factorDraft = $("#factor-input").value;
+  state.inputMode = mode;
+  state.settingsOpen = false;
+  state.radialPointerId = null;
+  state.radialTargetDigit = null;
+  localStorage.setItem("rowEchelonInputMode", state.inputMode);
+  audio.play("tap");
+  renderControls();
+}
+
+function ensureUsableFactor() {
+  return validateFactorInput();
+}
+
 function renderMatrix() {
   const matrix = $("#matrix");
   matrix.replaceChildren(
@@ -293,12 +368,29 @@ function renderControls() {
   $$(".operation-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
   });
+
+  $("#settings-button").classList.toggle("active", state.settingsOpen);
+  $("#settings-button").setAttribute("aria-expanded", String(state.settingsOpen));
+  $("#settings-panel").hidden = !state.settingsOpen;
+  $$(".input-mode-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.inputMode === state.inputMode);
+  });
+
   const factorInput = $("#factor-input");
   if (document.activeElement !== factorInput) {
-    factorInput.value = state.factor.toString();
+    factorInput.value = state.factorDraft;
     factorInput.classList.remove("invalid");
     factorInput.removeAttribute("aria-invalid");
   }
+  const isKeyboardMode = state.inputMode === "keyboard";
+  factorInput.readOnly = !isKeyboardMode;
+  factorInput.setAttribute("inputmode", isKeyboardMode ? "text" : "none");
+  factorInput.classList.toggle("readonly", !isKeyboardMode);
+
+  $("#numeric-tools").hidden = isKeyboardMode;
+  $("#keypad-panel").hidden = state.inputMode !== "keypad";
+  $("#radial-panel").hidden = state.inputMode !== "radial";
+  renderRadialTarget();
 }
 
 function render() {
@@ -318,6 +410,7 @@ function startLevel(level) {
   state.history = [];
   state.mode = "add";
   state.factor = fraction(-1);
+  state.factorDraft = "-1";
   state.selectedRow = null;
   state.isSolved = false;
   state.steps = 0;
@@ -338,6 +431,10 @@ function applyChange(change) {
 function chooseRow(row) {
   if (state.isSolved) return;
   if (state.mode === "scale") {
+    if (!ensureUsableFactor()) {
+      audio.play("tap");
+      return;
+    }
     audio.play("apply");
     applyChange(() => {
       state.matrix[row] = state.matrix[row].map((value) => value.multiply(state.factor));
@@ -360,6 +457,10 @@ function chooseRow(row) {
   }
 
   const source = state.selectedRow;
+  if (state.mode === "add" && !ensureUsableFactor()) {
+    audio.play("tap");
+    return;
+  }
   audio.play("apply");
   applyChange(() => {
     if (state.mode === "swap") {
@@ -472,26 +573,67 @@ function addCompletionSparkles() {
 }
 
 function updateFactorFromInput({ restoreInvalid = false } = {}) {
-  const input = $("#factor-input");
-  const value = Fraction.parse(input.value);
+  const isValid = validateFactorInput({ restoreInvalid, clearSelection: true });
+  if (isValid) renderMatrix();
+  return isValid;
+}
 
-  if (!value || value.isZero) {
-    input.classList.add("invalid");
-    input.setAttribute("aria-invalid", "true");
-    if (restoreInvalid) {
-      input.value = state.factor.toString();
-      input.classList.remove("invalid");
-      input.removeAttribute("aria-invalid");
-    }
-    return false;
+function renderRadialTarget() {
+  const dial = $("#radial-dial");
+  if (!dial) return;
+  $$(".radial-digit").forEach((digit) => {
+    digit.classList.toggle("targeted", digit.dataset.digit === state.radialTargetDigit);
+  });
+  dial.classList.toggle("has-target", state.radialTargetDigit !== null);
+}
+
+function radialInfoFromPointer(event) {
+  const dial = $("#radial-dial");
+  const rect = dial.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const dx = event.clientX - centerX;
+  const dy = event.clientY - centerY;
+  const distance = Math.hypot(dx, dy);
+  const angleFromX = Math.atan2(dy, dx) * 180 / Math.PI;
+  const zeroTopAngle = (angleFromX + 450) % 360;
+  const digit = DIGITS[Math.floor((zeroTopAngle + 18) / 36) % DIGITS.length];
+  const deadZone = Math.max(30, rect.width * 0.18);
+  const pointerLength = Math.min(distance, rect.width * 0.42);
+
+  return {
+    angleFromX,
+    deadZone,
+    digit: distance < deadZone ? null : digit,
+    distance,
+    pointerLength,
+  };
+}
+
+function updateRadialGesture(event) {
+  if (state.radialPointerId !== event.pointerId) return;
+  const dial = $("#radial-dial");
+  const info = radialInfoFromPointer(event);
+  state.radialTargetDigit = info.digit;
+  dial.style.setProperty("--pointer-angle", `${info.angleFromX}deg`);
+  dial.style.setProperty("--pointer-length", `${info.pointerLength}px`);
+  renderRadialTarget();
+}
+
+function endRadialGesture(event, { commit = false } = {}) {
+  if (state.radialPointerId !== event.pointerId) return;
+  const dial = $("#radial-dial");
+  const selectedDigit = state.radialTargetDigit;
+  state.radialPointerId = null;
+  state.radialTargetDigit = null;
+  dial.classList.remove("dragging");
+  renderRadialTarget();
+  try {
+    dial.releasePointerCapture(event.pointerId);
+  } catch {
+    // Pointer capture may already be released by the browser.
   }
-
-  state.factor = value;
-  state.selectedRow = null;
-  input.classList.remove("invalid");
-  input.removeAttribute("aria-invalid");
-  renderMatrix();
-  return true;
+  if (commit && selectedDigit !== null) appendFactorDigit(selectedDigit);
 }
 
 $$(".operation-button").forEach((button) => {
@@ -504,9 +646,30 @@ $$(".operation-button").forEach((button) => {
   });
 });
 
+$("#settings-button").addEventListener("click", () => {
+  audio.play("tap");
+  state.settingsOpen = !state.settingsOpen;
+  renderControls();
+});
+
+$$(".input-mode-button").forEach((button) => {
+  button.addEventListener("click", () => setInputMode(button.dataset.inputMode));
+});
+
+$$(".keypad-button").forEach((button) => {
+  button.addEventListener("click", () => appendFactorDigit(button.dataset.digit));
+});
+
+$("#backspace-button").addEventListener("click", () => backspaceFactorInput());
+$("#clear-button").addEventListener("click", () => clearFactorInput());
+
 $("#reset-button").addEventListener("click", resetLevel);
 $("#factor-input").addEventListener("focus", (event) => {
   if (state.isSolved) {
+    event.target.blur();
+    return;
+  }
+  if (state.inputMode !== "keyboard") {
     event.target.blur();
     return;
   }
@@ -520,6 +683,63 @@ $("#factor-input").addEventListener("keydown", (event) => {
   event.preventDefault();
   if (updateFactorFromInput({ restoreInvalid: true })) {
     event.target.blur();
+  }
+});
+
+$("#radial-dial").addEventListener("pointerdown", (event) => {
+  if (state.isSolved || state.inputMode !== "radial") return;
+  const dial = $("#radial-dial");
+  const info = radialInfoFromPointer(event);
+  if (info.distance > info.deadZone) return;
+  event.preventDefault();
+  state.radialPointerId = event.pointerId;
+  state.radialTargetDigit = null;
+  dial.classList.add("dragging");
+  dial.setPointerCapture(event.pointerId);
+  updateRadialGesture(event);
+});
+
+$("#radial-dial").addEventListener("pointermove", (event) => {
+  if (state.radialPointerId !== event.pointerId) return;
+  event.preventDefault();
+  updateRadialGesture(event);
+});
+
+$("#radial-dial").addEventListener("pointerup", (event) => {
+  if (state.radialPointerId !== event.pointerId) return;
+  event.preventDefault();
+  updateRadialGesture(event);
+  endRadialGesture(event, { commit: true });
+});
+
+$("#radial-dial").addEventListener("pointercancel", (event) => {
+  endRadialGesture(event);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (state.isSolved || event.metaKey || event.ctrlKey || event.altKey) return;
+
+  if (state.inputMode === "keyboard") {
+    if (document.activeElement === $("#factor-input") && event.key === "Escape") {
+      event.preventDefault();
+      clearFactorInput();
+    }
+    return;
+  }
+
+  if (DIGITS.includes(event.key)) {
+    event.preventDefault();
+    appendFactorDigit(event.key);
+    return;
+  }
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    backspaceFactorInput();
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    clearFactorInput();
   }
 });
 
