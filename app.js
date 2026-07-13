@@ -185,6 +185,7 @@ const state = {
   playerEntry: null,
   leaderboardDate: "",
   leaderboardMessage: "",
+  leaderboardVisible: false,
   accountMessage: "",
   celebrationToken: 0,
 };
@@ -340,6 +341,10 @@ function leaderboardRows() {
 }
 
 function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
+  const card = $("#leaderboard-card");
+  card.hidden = !state.leaderboardVisible;
+  $(".game-shell").classList.toggle("leaderboard-visible", state.leaderboardVisible);
+
   $("#leaderboard-date").textContent = state.leaderboardDate
     ? `TODAY ${state.leaderboardDate}`
     : "TODAY";
@@ -401,7 +406,9 @@ function setLeaderboardData(data, renderOptions = {}) {
   state.leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
   state.playerEntry = data.playerEntry || null;
   state.leaderboardDate = data.date || "";
-  renderLeaderboard(renderOptions);
+  if (!renderOptions.skipRender) {
+    renderLeaderboard(renderOptions);
+  }
 }
 
 async function refreshLeaderboard() {
@@ -444,7 +451,7 @@ async function submitCompletedLevel() {
   if (!signedIn()) {
     state.accountMessage = "Create a player before competing.";
     renderAccount();
-    return;
+    return {};
   }
 
   const previousRank = state.playerEntry?.rank || null;
@@ -465,14 +472,11 @@ async function submitCompletedLevel() {
     state.leaderboardMessage = rankImproved
       ? `Rank up: #${knownPreviousRank} -> #${currentRank}`
       : `You have solved ${data.playerEntry?.solved ?? 1} today.`;
-    setLeaderboardData(data, { rankImproved, previousRank: knownPreviousRank });
-    if (rankImproved) {
-      audio.play("rank");
-      launchLeaderboardConfetti();
-    }
+    setLeaderboardData(data, { skipRender: true });
+    return { rankImproved, previousRank: knownPreviousRank };
   } catch (error) {
     state.leaderboardMessage = `Score not saved: ${error.message}`;
-    renderLeaderboard();
+    return {};
   }
 }
 
@@ -532,6 +536,7 @@ function startLevel(level) {
   state.selectedRow = null;
   state.isSolved = false;
   state.steps = 0;
+  state.leaderboardVisible = false;
   $("#sparkle-layer").replaceChildren();
   render();
 }
@@ -597,6 +602,7 @@ function resetLevel() {
   state.selectedRow = null;
   state.isSolved = false;
   state.steps = 0;
+  state.leaderboardVisible = false;
   render();
 }
 
@@ -621,8 +627,17 @@ async function completeLevel() {
 
   if (token !== state.celebrationToken) return;
   addCompletionSparkles();
-  await leaderboardSave;
-  await wait(2800);
+  const leaderboardResult = await leaderboardSave;
+  if (token !== state.celebrationToken) return;
+
+  state.leaderboardVisible = true;
+  renderLeaderboard(leaderboardResult);
+  if (leaderboardResult?.rankImproved) {
+    audio.play("rank");
+    launchLeaderboardConfetti();
+  }
+
+  await wait(3600);
   if (token === state.celebrationToken) startLevel(state.level + 1);
 }
 

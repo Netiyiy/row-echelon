@@ -285,13 +285,24 @@ h1 {
 }
 
 .leaderboard-card {
-  position: relative;
-  margin-top: 16px;
+  position: fixed;
+  z-index: 6;
+  top: 50%;
+  left: 50%;
+  width: min(88vw, 360px);
+  margin: 0;
   padding: 14px;
   overflow: hidden;
   border: 1px solid rgb(163 110 79 / 72%);
   border-radius: 18px;
   background: rgb(92 61 48 / 94%);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 34%);
+  transform: translate(-50%, -50%);
+}
+
+.game-shell.leaderboard-visible .matrix-stage,
+.game-shell.leaderboard-visible .control-card {
+  filter: saturate(0.85) brightness(0.8);
 }
 
 .leaderboard-heading {
@@ -599,7 +610,7 @@ h1 {
   }
 
   .leaderboard-card {
-    margin-top: 18px;
+    margin-top: 0;
   }
 }
 
@@ -670,7 +681,7 @@ h1 {
 
   .leaderboard-card {
     width: min(56vw, 620px);
-    margin: 18px auto 0;
+    margin: 0;
     padding: 19px;
     border-radius: 20px;
   }
