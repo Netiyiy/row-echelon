@@ -326,6 +326,16 @@ function clearFactorInput({ playSound = true } = {}) {
   setFactorDraft("");
 }
 
+function toggleFactorSign() {
+  const input = $("#factor-input");
+  const current = input.value;
+  if (!current) {
+    setFactorDraft("-", { playSound: true });
+    return;
+  }
+  setFactorDraft(current.startsWith("-") ? current.slice(1) : `-${current}`, { playSound: true });
+}
+
 function setInputMode(mode) {
   if (!INPUT_MODES.includes(mode)) return;
   state.factorDraft = $("#factor-input").value;
@@ -662,6 +672,7 @@ $$(".keypad-button").forEach((button) => {
 
 $("#backspace-button").addEventListener("click", () => backspaceFactorInput());
 $("#clear-button").addEventListener("click", () => clearFactorInput());
+$("#sign-toggle-button").addEventListener("click", () => toggleFactorSign());
 
 $("#reset-button").addEventListener("click", resetLevel);
 $("#factor-input").addEventListener("focus", (event) => {

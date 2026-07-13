@@ -292,6 +292,7 @@ h1 {
 
 .operation-button,
 .factor-input,
+.sign-toggle-button,
 .edit-button,
 .keypad-button {
   border: 1px solid transparent;
@@ -313,10 +314,22 @@ h1 {
 
 .factor-line {
   display: grid;
-  grid-template-columns: 62px 1fr;
+  grid-template-columns: 62px 42px 1fr;
   align-items: center;
-  gap: 0;
+  gap: 7px;
   margin-top: 10px;
+}
+
+.sign-toggle-button {
+  min-height: 32px;
+  border-color: var(--accent-soft);
+  font-size: 12px;
+}
+
+.sign-toggle-button:active {
+  color: var(--cocoa);
+  background: var(--accent);
+  transform: translateY(1px);
 }
 
 .factor-input {
@@ -670,8 +683,13 @@ h1 {
   }
 
   .factor-line {
-    grid-template-columns: 68px 1fr;
+    grid-template-columns: 68px 48px 1fr;
     margin-top: 14px;
+  }
+
+  .sign-toggle-button {
+    min-height: 41px;
+    font-size: 13px;
   }
 
   .factor-input {

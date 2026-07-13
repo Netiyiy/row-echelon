@@ -10,7 +10,7 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
@@ -52,6 +52,9 @@
         </div>
         <div class="factor-line">
           <label class="eyebrow" for="factor-input">FACTOR</label>
+          <button id="sign-toggle-button" class="sign-toggle-button" type="button" aria-label="Toggle factor sign">
+            +/-
+          </button>
           <input
             id="factor-input"
             class="factor-input"
@@ -106,10 +109,10 @@
       </section>
 
       <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
-      <span class="version-label" aria-label="Version">v10</span>
+      <span class="version-label" aria-label="Version">v11</span>
       <button id="reset-button" class="reset-button" type="button">RESET</button>
     </main>
 
-    <script src="app.js?v=6" defer></script>
+    <script src="app.js?v=7" defer></script>
   </body>
 </html>
