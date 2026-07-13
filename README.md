@@ -12,6 +12,21 @@ python3 -m http.server 4173
 
 Open <http://localhost:4173>.
 
+For accounts and the multiplayer daily leaderboard, run the backend in a
+second terminal:
+
+```bash
+cd leaderboard-api
+npm start
+```
+
+The web app defaults to `http://localhost:8787` for the API. For the public
+GitHub Pages site, deploy `leaderboard-api` somewhere public and set:
+
+```js
+localStorage.setItem("rowEchelonApiBaseUrl", "https://your-api-host.example.com")
+```
+
 On iPhone Safari, open the hosted URL, tap the Share button, then choose
 **Add to Home Screen**.
 

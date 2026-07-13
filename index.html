@@ -10,11 +10,34 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
       <div class="top-glow" aria-hidden="true"></div>
+
+      <section id="account-gate" class="account-gate" aria-label="Create player account">
+        <div class="account-card">
+          <p class="eyebrow">PLAYER ACCOUNT</p>
+          <h2>Choose Your Name</h2>
+          <p class="account-copy">Create a player to compete on today&apos;s leaderboard.</p>
+          <input
+            id="player-name-input"
+            class="player-name-input"
+            name="player-name"
+            maxlength="18"
+            autocomplete="nickname"
+            autocapitalize="words"
+            spellcheck="false"
+            placeholder="Player name"
+            aria-label="Player name"
+          />
+          <button id="create-account-button" class="create-account-button" type="button">
+            START
+          </button>
+          <p id="account-message" class="account-message" aria-live="polite"></p>
+        </div>
+      </section>
 
       <header class="hud">
         <span id="current-score">STEPS 0</span>
@@ -54,11 +77,22 @@
         </div>
       </section>
 
+      <section class="leaderboard-card" aria-label="Daily leaderboard">
+        <div class="leaderboard-heading">
+          <p class="eyebrow">DAILY LEADERBOARD</p>
+          <span id="player-label" class="player-label">NO PLAYER</span>
+        </div>
+        <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
+        <ol id="leaderboard-list" class="leaderboard-list"></ol>
+        <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
+        <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
+      </section>
+
       <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
-      <span class="version-label" aria-label="Version">v9</span>
+      <span class="version-label" aria-label="Version">v13</span>
       <button id="reset-button" class="reset-button" type="button">RESET</button>
     </main>
 
-    <script src="app.js?v=5" defer></script>
+    <script src="app.js?v=9" defer></script>
   </body>
 </html>

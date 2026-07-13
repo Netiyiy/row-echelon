@@ -96,6 +96,13 @@ const choose = (values) => values[randomInt(0, values.length - 1)];
 const nonZeroSmallInt = () => choose([-3, -2, -1, 1, 2, 3]);
 const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
+const LEADERBOARD_LIMIT = 10;
+const SESSION_KEY = "rowEchelonPlayerSession";
+const API_BASE_URL = (
+  window.ROW_ECHELON_API_BASE_URL
+  || localStorage.getItem("rowEchelonApiBaseUrl")
+  || "http://localhost:8787"
+).replace(/\/$/, "");
 
 class GameAudio {
   constructor() {
@@ -117,17 +124,19 @@ class GameAudio {
 
   play(effect) {
     this.startMusic();
-    const extension = effect === "complete" ? "mp3" : "wav";
-    const player = new Audio(`assets/audio/ui_${effect}.${extension}`);
-    player.volume = effect === "complete" ? 0.68 : 0.55;
+    const isCelebration = effect === "complete" || effect === "rank";
+    const fileName = effect === "rank" ? "complete" : effect;
+    const extension = isCelebration ? "mp3" : "wav";
+    const player = new Audio(`assets/audio/ui_${fileName}.${extension}`);
+    player.volume = effect === "complete" ? 0.68 : effect === "rank" ? 0.46 : 0.55;
     this.effects.add(player);
     player.addEventListener("ended", () => {
       this.effects.delete(player);
-      if (effect === "complete") {
+      if (isCelebration) {
         this.fadeBackgroundTo(this.backgroundVolume, 800);
       }
     });
-    if (effect === "complete") {
+    if (isCelebration) {
       this.duckMusic();
     }
     player.play().catch(() => {});
@@ -171,8 +180,51 @@ const state = {
   isSolved: false,
   steps: 0,
   bestSteps: Number(localStorage.getItem("rowEchelonBestSteps")) || null,
+  playerSession: loadPlayerSession(),
+  leaderboard: [],
+  playerEntry: null,
+  leaderboardDate: "",
+  leaderboardMessage: "",
+  accountMessage: "",
   celebrationToken: 0,
 };
+
+function loadPlayerSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!session?.token || !session?.player?.id || !session?.player?.name) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function savePlayerSession(session) {
+  state.playerSession = session;
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function signedIn() {
+  return Boolean(state.playerSession?.token);
+}
+
+async function apiRequest(path, { method = "GET", body, auth = false } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth && state.playerSession?.token) {
+    headers.Authorization = `Bearer ${state.playerSession.token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
 
 function intMatrix(values) {
   return values.map((row) => row.map(fraction));
@@ -267,6 +319,163 @@ function updateScoreLabels() {
   $("#best-score").textContent = `BEST ${state.bestSteps ?? "--"}`;
 }
 
+function renderAccount() {
+  const hasPlayer = signedIn();
+  $("#account-gate").hidden = hasPlayer;
+  $(".game-shell").classList.toggle("account-locked", !hasPlayer);
+  $("#player-label").textContent = hasPlayer ? state.playerSession.player.name : "NO PLAYER";
+  $("#account-message").textContent = state.accountMessage;
+}
+
+function leaderboardRows() {
+  const rows = [...state.leaderboard];
+  if (
+    state.playerEntry
+    && !rows.some((entry) => entry.playerId === state.playerEntry.playerId)
+  ) {
+    rows.push({ isGap: true });
+    rows.push(state.playerEntry);
+  }
+  return rows;
+}
+
+function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
+  $("#leaderboard-date").textContent = state.leaderboardDate
+    ? `TODAY ${state.leaderboardDate}`
+    : "TODAY";
+  $("#leaderboard-message").textContent = state.leaderboardMessage;
+
+  const rows = leaderboardRows();
+  const list = $("#leaderboard-list");
+  if (!signedIn()) {
+    list.replaceChildren();
+    $("#leaderboard-message").textContent = "Create a player to compete.";
+    return;
+  }
+  if (!rows.length) {
+    const empty = document.createElement("li");
+    empty.className = "leaderboard-empty";
+    empty.textContent = "No scores yet today.";
+    list.replaceChildren(empty);
+    return;
+  }
+
+  list.replaceChildren(
+    ...rows.map((entry) => {
+      const row = document.createElement("li");
+      if (entry.isGap) {
+        row.className = "leaderboard-gap";
+        row.textContent = "...";
+        return row;
+      }
+
+      row.className = `leaderboard-row${entry.isCurrentPlayer ? " current-player" : ""}`;
+      if (rankImproved && entry.isCurrentPlayer && previousRank && previousRank > entry.rank) {
+        row.classList.add("rank-up");
+        row.style.setProperty("--rank-shift", `${Math.min(previousRank - entry.rank, 6) * 38}px`);
+      }
+
+      const rank = document.createElement("span");
+      rank.className = "leaderboard-rank";
+      rank.textContent = `#${entry.rank}`;
+
+      const name = document.createElement("span");
+      name.className = "leaderboard-name";
+      name.textContent = entry.name;
+
+      const solved = document.createElement("span");
+      solved.className = "leaderboard-solved";
+      solved.textContent = `${entry.solved} solved`;
+
+      const steps = document.createElement("span");
+      steps.className = "leaderboard-steps";
+      steps.textContent = `${entry.totalSteps} steps`;
+
+      row.append(rank, name, solved, steps);
+      return row;
+    }),
+  );
+}
+
+function setLeaderboardData(data, renderOptions = {}) {
+  state.leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
+  state.playerEntry = data.playerEntry || null;
+  state.leaderboardDate = data.date || "";
+  renderLeaderboard(renderOptions);
+}
+
+async function refreshLeaderboard() {
+  if (!signedIn()) {
+    renderLeaderboard();
+    return;
+  }
+  try {
+    const data = await apiRequest(`/api/leaderboard?limit=${LEADERBOARD_LIMIT}`, { auth: true });
+    state.leaderboardMessage = "Rank is based on problems solved today.";
+    setLeaderboardData(data);
+  } catch (error) {
+    state.leaderboardMessage = `Leaderboard offline: ${error.message}`;
+    renderLeaderboard();
+  }
+}
+
+function launchLeaderboardConfetti() {
+  const layer = $("#leaderboard-confetti");
+  layer.replaceChildren();
+  for (let index = 0; index < 24; index += 1) {
+    const piece = document.createElement("span");
+    piece.className = "leaderboard-confetti-piece";
+    const angle = Math.random() * Math.PI * 2;
+    const distance = randomInt(42, 150);
+    piece.style.setProperty("--confetti-x", `${Math.cos(angle) * distance}px`);
+    piece.style.setProperty("--confetti-y", `${Math.sin(angle) * distance}px`);
+    piece.style.setProperty("--confetti-rotate", `${randomInt(-160, 160)}deg`);
+    piece.style.setProperty("--confetti-delay", `${Math.random() * 240}ms`);
+    piece.style.setProperty(
+      "--confetti-color",
+      index % 3 === 0 ? "var(--success)" : index % 2 === 0 ? "var(--accent)" : "var(--cream)",
+    );
+    layer.append(piece);
+  }
+  window.setTimeout(() => layer.replaceChildren(), 1800);
+}
+
+async function submitCompletedLevel() {
+  if (!signedIn()) {
+    state.accountMessage = "Create a player before competing.";
+    renderAccount();
+    return;
+  }
+
+  const previousRank = state.playerEntry?.rank || null;
+  try {
+    const data = await apiRequest("/api/complete", {
+      method: "POST",
+      auth: true,
+      body: {
+        level: state.level,
+        steps: state.steps,
+      },
+    });
+    const currentRank = data.playerEntry?.rank || data.rank;
+    const knownPreviousRank = data.previousRank || previousRank;
+    const rankImproved = Boolean(
+      data.rankImproved || (knownPreviousRank && currentRank && currentRank < knownPreviousRank),
+    );
+    state.leaderboardMessage = rankImproved
+      ? `Rank up: #${knownPreviousRank} -> #${currentRank}`
+      : `You have solved ${data.playerEntry?.solved ?? 1} today.`;
+    setLeaderboardData(data, { rankImproved, previousRank: knownPreviousRank });
+    if (rankImproved) {
+      audio.play("rank");
+      launchLeaderboardConfetti();
+    }
+  } catch (error) {
+    state.leaderboardMessage = `Score not saved: ${error.message}`;
+    renderLeaderboard();
+  }
+}
+
 function renderMatrix() {
   const matrix = $("#matrix");
   matrix.replaceChildren(
@@ -307,6 +516,8 @@ function render() {
   $(".game-shell").classList.toggle("celebrating", state.isSolved);
   renderMatrix();
   renderControls();
+  renderAccount();
+  renderLeaderboard();
   updateScoreLabels();
 }
 
@@ -337,6 +548,12 @@ function applyChange(change) {
 
 function chooseRow(row) {
   if (state.isSolved) return;
+  if (!signedIn()) {
+    state.accountMessage = "Create a player first.";
+    renderAccount();
+    audio.play("tap");
+    return;
+  }
   if (state.mode === "scale") {
     audio.play("apply");
     applyChange(() => {
@@ -390,6 +607,7 @@ async function completeLevel() {
   }
   updateScoreLabels();
   audio.play("complete");
+  const leaderboardSave = submitCompletedLevel();
 
   const token = ++state.celebrationToken;
   const reduced = reducedRowEchelonForm(state.matrix);
@@ -403,6 +621,7 @@ async function completeLevel() {
 
   if (token !== state.celebrationToken) return;
   addCompletionSparkles();
+  await leaderboardSave;
   await wait(2800);
   if (token === state.celebrationToken) startLevel(state.level + 1);
 }
@@ -494,6 +713,37 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
   return true;
 }
 
+async function createAccount() {
+  const input = $("#player-name-input");
+  const name = input.value.trim();
+  if (name.length < 2) {
+    state.accountMessage = "Use at least 2 characters.";
+    renderAccount();
+    return;
+  }
+
+  $("#create-account-button").disabled = true;
+  state.accountMessage = "Creating player...";
+  renderAccount();
+  try {
+    const session = await apiRequest("/api/accounts", {
+      method: "POST",
+      body: { name },
+    });
+    savePlayerSession(session);
+    state.accountMessage = "";
+    state.leaderboardMessage = "Account ready. Solve levels to climb.";
+    input.value = "";
+    render();
+    await refreshLeaderboard();
+  } catch (error) {
+    state.accountMessage = error.message;
+    renderAccount();
+  } finally {
+    $("#create-account-button").disabled = false;
+  }
+}
+
 $$(".operation-button").forEach((button) => {
   button.addEventListener("click", () => {
     if (state.isSolved) return;
@@ -502,6 +752,13 @@ $$(".operation-button").forEach((button) => {
     state.selectedRow = null;
     render();
   });
+});
+
+$("#create-account-button").addEventListener("click", createAccount);
+$("#player-name-input").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  createAccount();
 });
 
 $("#reset-button").addEventListener("click", resetLevel);
@@ -532,3 +789,4 @@ if ("serviceWorker" in navigator) {
 }
 
 startLevel(1);
+refreshLeaderboard();
