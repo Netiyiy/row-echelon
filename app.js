@@ -98,11 +98,21 @@ const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
-const API_BASE_URL = (
-  window.ROW_ECHELON_API_BASE_URL
-  || localStorage.getItem("rowEchelonApiBaseUrl")
-  || "http://localhost:8787"
-).replace(/\/$/, "");
+
+function configuredApiBaseUrl() {
+  const queryApi = new URLSearchParams(window.location.search).get("api");
+  if (queryApi) {
+    localStorage.setItem("rowEchelonApiBaseUrl", queryApi);
+  }
+  return (
+    window.ROW_ECHELON_API_BASE_URL
+    || queryApi
+    || localStorage.getItem("rowEchelonApiBaseUrl")
+    || "http://localhost:8787"
+  ).replace(/\/$/, "");
+}
+
+const API_BASE_URL = configuredApiBaseUrl();
 
 class GameAudio {
   constructor() {
@@ -215,11 +225,16 @@ async function apiRequest(path, { method = "GET", body, auth = false } = {}) {
     headers.Authorization = `Bearer ${state.playerSession.token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error("Backend is not reachable yet.");
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || `Request failed (${response.status})`);
