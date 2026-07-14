@@ -40,3 +40,10 @@ On iPhone Safari, open the hosted URL, tap the Share button, then choose
 
 The bundled audio is CC0. Source details are in
 `assets/audio/AudioCredits.txt`.
+
+## iOS App Store project
+
+The ready-to-open Xcode project is at `ios/RowEchelon/RowEchelon.xcodeproj`.
+It bundles the game for offline launch and adds native haptics, background audio
+suspension, an App Store privacy manifest, and Release build configuration.
+See `ios/RowEchelon/README.md` and `ios/RowEchelon/APP_STORE_CHECKLIST.md`.

@@ -1,10 +1,11 @@
-const CACHE_NAME = "row-echelon-v55";
+const CACHE_NAME = "row-echelon-v56";
 const ASSETS = [
   "./",
   "index.html",
   "styles.css?v=35",
   "app.js?v=55",
   "manifest.webmanifest",
+  "privacy.html",
   "assets/audio/row_echelon_music.mp3",
   "assets/audio/ui_apply.wav",
   "assets/audio/ui_complete.mp3",

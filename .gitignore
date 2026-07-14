@@ -1,3 +1,10 @@
 supabase/.temp/
 supabase/functions/.env
 supabase/functions/.env.*
+
+# Xcode user/build artifacts
+DerivedData/
+*.xcarchive
+*.xcuserstate
+xcuserdata/
+*.ipa
