@@ -20,12 +20,16 @@ cd leaderboard-api
 npm start
 ```
 
-The web app defaults to `http://localhost:8787` for the API. For the public
-GitHub Pages site, deploy `leaderboard-api` somewhere public and set:
+The web app defaults to `http://localhost:8787` for the API. The production
+backend is designed for Supabase Edge Functions; see `SUPABASE_SETUP.md`.
 
-```js
-localStorage.setItem("rowEchelonApiBaseUrl", "https://your-api-host.example.com")
+After deploying Supabase, open the public site once with:
+
+```text
+https://netiyiy.github.io/row-echelon/?api=https://YOUR_PROJECT_REF.functions.supabase.co/row-echelon-api
 ```
+
+The app stores that API URL in `localStorage` for future visits.
 
 On iPhone Safari, open the hosted URL, tap the Share button, then choose
 **Add to Home Screen**.
