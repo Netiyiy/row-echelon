@@ -1653,9 +1653,13 @@ async function completeLevel() {
   const leaderboardSave = submitCompletedLevel(scoreBreakdown);
 
   const token = ++state.celebrationToken;
+  const solvedMatrix = cloneMatrix(state.matrix);
+  const replayFrames = state.history.map((matrix) => cloneMatrix(matrix));
+  await animateCasinoHistoryReplay(replayFrames, solvedMatrix, token);
+  if (token !== state.celebrationToken) return;
   launchGameplayConfetti(token);
-  const reduced = reducedRowEchelonForm(state.matrix);
-  await wait(360);
+  const reduced = reducedRowEchelonForm(solvedMatrix);
+  await wait(420);
   await animateSolutionReveal(reduced, token);
 
   if (token !== state.celebrationToken) return;
@@ -1669,6 +1673,95 @@ async function completeLevel() {
     },
     token,
   );
+}
+
+function displayMatrixFrame(matrix) {
+  const rows = $$("#matrix .matrix-row");
+  rows.forEach((row, rowIndex) => {
+    [...row.querySelectorAll(".matrix-value")].forEach((cell, columnIndex) => {
+      const value = matrix[rowIndex]?.[columnIndex];
+      if (value) cell.textContent = value.toString();
+    });
+  });
+}
+
+async function animateCasinoHistoryReplay(history, solvedMatrix, token) {
+  const frames = [...history, solvedMatrix];
+  if (!introReducedMotion() && frames.length > 1) {
+    await wait(620);
+    if (token !== state.celebrationToken) return;
+  }
+  displayMatrixFrame(frames[0] || solvedMatrix);
+  if (introReducedMotion() || frames.length <= 1) {
+    displayMatrixFrame(solvedMatrix);
+    await wait(80);
+    return;
+  }
+
+  const stage = $("#matrix-stage");
+  const label = document.createElement("div");
+  label.className = "casino-replay-label";
+  label.textContent = "START";
+  stage.append(label);
+  stage.classList.add("casino-replaying");
+  await wait(340);
+
+  const totalSteps = frames.length - 1;
+  for (let frameIndex = 1; frameIndex < frames.length; frameIndex += 1) {
+    if (token !== state.celebrationToken) break;
+    const isFinalFrame = frameIndex === totalSteps;
+    const cells = $$("#matrix .matrix-value");
+    const outDuration = isFinalFrame ? 125 : frameIndex === 1 ? 105 : 78;
+    const inDuration = isFinalFrame ? 230 : frameIndex === 1 ? 185 : 135;
+    const outgoing = cells.map((cell, cellIndex) => cell.animate(
+      [
+        { opacity: 1, filter: "blur(0)", transform: "perspective(420px) rotateX(0) translateY(0)" },
+        { opacity: 0, filter: "blur(2px)", transform: "perspective(420px) rotateX(-76deg) translateY(17px)" },
+      ],
+      {
+        duration: outDuration,
+        delay: (cellIndex % 4) * 7,
+        fill: "forwards",
+        easing: "cubic-bezier(0.7, 0, 0.84, 0)",
+      },
+    ));
+    await Promise.all(outgoing.map((animation) => animation.finished.catch(() => {})));
+    if (token !== state.celebrationToken) {
+      outgoing.forEach((animation) => animation.cancel());
+      break;
+    }
+
+    displayMatrixFrame(frames[frameIndex]);
+    label.textContent = `STEP ${frameIndex} / ${totalSteps}`;
+    outgoing.forEach((animation) => animation.cancel());
+    audio.play(isFinalFrame ? "apply" : "tap");
+
+    const incoming = cells.map((cell, cellIndex) => cell.animate(
+      [
+        { opacity: 0, filter: "blur(2px)", transform: "perspective(420px) rotateX(78deg) translateY(-18px) scale(0.94)" },
+        { opacity: 1, offset: 0.72, filter: "blur(0)", transform: "perspective(420px) rotateX(-8deg) translateY(2px) scale(1.035)" },
+        { opacity: 1, filter: "blur(0)", transform: "perspective(420px) rotateX(0) translateY(0) scale(1)" },
+      ],
+      {
+        duration: inDuration,
+        delay: (cellIndex % 4) * 8,
+        fill: "both",
+        easing: "cubic-bezier(0.12, 1.12, 0.24, 1)",
+      },
+    ));
+    await Promise.all(incoming.map((animation) => animation.finished.catch(() => {})));
+    incoming.forEach((animation) => animation.cancel());
+    if (!isFinalFrame) await wait(42);
+  }
+
+  displayMatrixFrame(solvedMatrix);
+  label.textContent = `STEP ${totalSteps} / ${totalSteps}`;
+  stage.classList.remove("casino-replaying");
+  if (token === state.celebrationToken) {
+    restartAnimationClass(stage, "casino-replay-landed", 680);
+    await wait(620);
+  }
+  label.remove();
 }
 
 function resetSolutionReveal() {
