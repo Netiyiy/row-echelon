@@ -192,7 +192,6 @@ class GameAudio {
       buttonDown: "assets/audio/intro/intro_button_down.wav",
       buttonUp: "assets/audio/intro/intro_button_up.wav",
       clack: "assets/audio/intro/intro_key_clack.wav",
-      clackAlt: "assets/audio/intro/intro_key_clack_alt.wav",
       press: "assets/audio/intro/intro_key_press.wav",
       soft: "assets/audio/intro/intro_key_soft.wav",
       tick: "assets/audio/intro/intro_key_tick.wav",
@@ -203,6 +202,10 @@ class GameAudio {
       return [cue, player];
     }));
     this.introPreloads = Object.values(this.introTemplates);
+    this.introContext = null;
+    this.introBuffers = new Map();
+    this.introLoadPromise = null;
+    this.introSources = new Set();
     this.effects = new Set();
     this.fadeFrame = null;
     this.restoreTimer = null;
@@ -225,6 +228,10 @@ class GameAudio {
     if (document.hidden || !this.enabled) return;
     this.userActivated = true;
     this.suspended = false;
+    this.prepareIntroAudio();
+    if (this.introContext?.state === "suspended") {
+      this.introContext.resume().catch(() => {});
+    }
     this.startMusic();
   }
 
@@ -251,8 +258,42 @@ class GameAudio {
     player.play().catch(cleanup);
   }
 
+  prepareIntroAudio() {
+    if (this.introLoadPromise || this.introBuffers.size === Object.keys(this.introFiles).length) {
+      return this.introLoadPromise;
+    }
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return null;
+    try {
+      this.introContext ||= new AudioContext();
+    } catch {
+      return null;
+    }
+    this.introLoadPromise = Promise.all(Object.entries(this.introFiles).map(async ([cue, source]) => {
+      const response = await fetch(source, { cache: "force-cache" });
+      if (!response.ok) throw new Error(`Unable to load intro sound: ${source}`);
+      const buffer = await this.introContext.decodeAudioData(await response.arrayBuffer());
+      this.introBuffers.set(cue, buffer);
+    })).catch(() => {}).finally(() => {
+      this.introLoadPromise = null;
+    });
+    return this.introLoadPromise;
+  }
+
   playIntro(cue, volume = 0.58) {
     if (!this.enabled || this.suspended || document.hidden) return;
+    const buffer = this.introBuffers.get(cue);
+    if (buffer && this.introContext) {
+      const source = this.introContext.createBufferSource();
+      const gain = this.introContext.createGain();
+      source.buffer = buffer;
+      gain.gain.value = volume;
+      source.connect(gain).connect(this.introContext.destination);
+      this.introSources.add(source);
+      source.onended = () => this.introSources.delete(source);
+      source.start();
+      return;
+    }
     const template = this.introTemplates[cue];
     if (!template) return;
     const player = template.cloneNode(true);
@@ -267,6 +308,7 @@ class GameAudio {
   enterIntro() {
     this.introMode = true;
     this.introPreloads.forEach((player) => player.load());
+    this.prepareIntroAudio();
     window.clearTimeout(this.restoreTimer);
     this.restoreTimer = null;
     if (this.fadeFrame) {
@@ -280,6 +322,7 @@ class GameAudio {
 
   exitIntro() {
     this.introMode = false;
+    this.stopIntroAudio();
     this.background.volume = this.backgroundVolume;
     this.background.muted = false;
     this.startMusic();
@@ -330,7 +373,22 @@ class GameAudio {
       }
     }
     this.effects.clear();
+    this.stopIntroAudio();
     this.updateMediaSession("paused");
+  }
+
+  stopIntroAudio() {
+    for (const source of this.introSources) {
+      try {
+        source.stop();
+      } catch {
+        // A source that already ended cannot be stopped again.
+      }
+    }
+    this.introSources.clear();
+    if (this.introContext?.state === "running") {
+      this.introContext.suspend().catch(() => {});
+    }
   }
 
   setEnabled(enabled) {
@@ -1796,12 +1854,30 @@ function introDelay(duration, token) {
   return wait(adjustedDuration).then(() => token === state.introToken);
 }
 
-function scheduleIntroSound(cue, delay, volume, token = state.introToken) {
-  const adjustedDelay = introReducedMotion() ? 0 : delay;
-  window.setTimeout(() => {
-    if (token !== state.introToken || !state.introVisible) return;
+function cueIntroAnimationAt(element, animationName, progress, cue, volume, token = state.introToken) {
+  if (!element) return;
+  if (introReducedMotion()) {
     audio.playIntro(cue, volume);
-  }, adjustedDelay);
+    return;
+  }
+  let missingFrames = 0;
+  const checkAnimation = () => {
+    if (token !== state.introToken || !state.introVisible) return;
+    const animation = element.getAnimations().find((candidate) => candidate.animationName === animationName);
+    if (!animation) {
+      missingFrames += 1;
+      if (missingFrames < 6) window.requestAnimationFrame(checkAnimation);
+      return;
+    }
+    const timing = animation.effect.getTiming();
+    const targetTime = Number(timing.delay || 0) + Number(timing.duration) * progress;
+    if (Number(animation.currentTime) >= targetTime) {
+      audio.playIntro(cue, volume);
+      return;
+    }
+    window.requestAnimationFrame(checkAnimation);
+  };
+  window.requestAnimationFrame(checkAnimation);
 }
 
 async function flyIntroToken(source, target, {
@@ -1856,7 +1932,14 @@ async function flyIntroToken(source, target, {
 async function formIntroMatrix(token) {
   const screen = $("#intro-screen");
   screen.classList.add("matrix-forming");
-  scheduleIntroSound("buttonDown", 338, 0.64, token);
+  cueIntroAnimationAt(
+    $(".intro-bracket.left"),
+    "intro-bracket-enter-left",
+    0.54,
+    "buttonDown",
+    0.64,
+    token,
+  );
   $("#intro-matrix").setAttribute("aria-hidden", "false");
   await introDelay(60, token);
   if (token !== state.introToken) return false;
@@ -1915,7 +1998,6 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
   screen.classList.remove("matrix-impact");
   void screen.offsetWidth;
   screen.classList.add("matrix-impact");
-  scheduleIntroSound(stepIndex % 2 ? "tick" : "press", 82, 0.5, token);
 
   const changes = [];
   step.values.forEach((row, rowIndex) => {
@@ -1930,6 +2012,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
     });
   });
 
+  let changeCuePlayed = false;
   await Promise.all(changes.map(async ({ cell, nextValue, delay }) => {
     if (!introReducedMotion()) {
       await cell.animate(
@@ -1943,6 +2026,10 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
     if (token !== state.introToken) return;
     cell.textContent = nextValue;
     cell.classList.add("value-visible", "changing");
+    if (!changeCuePlayed) {
+      changeCuePlayed = true;
+      audio.playIntro(stepIndex % 2 ? "tick" : "press", 0.5);
+    }
     if (!introReducedMotion()) {
       await cell.animate(
         [
@@ -2015,9 +2102,15 @@ async function runIntroAnimation() {
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
-  scheduleIntroSound("soft", 155, 0.46, token);
-  scheduleIntroSound("tick", 210, 0.48, token);
-  scheduleIntroSound("press", 260, 0.5, token);
+  const expansionCues = [
+    ["soft", 0.46],
+    ["tick", 0.48],
+    ["press", 0.5],
+  ];
+  $$("#intro-equations-expanded p").forEach((row, index) => {
+    const [cue, volume] = expansionCues[index];
+    cueIntroAnimationAt(row.querySelector(".inserted"), "intro-insert-token", 0.5, cue, volume, token);
+  });
 
   if (!(await introDelay(2100, token))) return;
   if (!(await formIntroMatrix(token))) return;
@@ -2038,9 +2131,22 @@ async function runIntroAnimation() {
   screen.classList.remove("matrix-impact");
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
-  scheduleIntroSound("clack", 198, 0.7, token);
-  scheduleIntroSound("clackAlt", 414, 0.62, token);
-  scheduleIntroSound("buttonUp", 438, 0.42, token);
+  cueIntroAnimationAt(
+    $(".intro-bracket.left"),
+    "intro-bracket-lock-left",
+    0.34,
+    "clack",
+    0.7,
+    token,
+  );
+  cueIntroAnimationAt(
+    $("#intro-rref-prefix"),
+    "intro-r-pop",
+    0.58,
+    "buttonUp",
+    0.5,
+    token,
+  );
   if (!(await introDelay(2100, token))) return;
   await finishIntro({ token });
 }
