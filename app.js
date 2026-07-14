@@ -186,16 +186,15 @@ function calculateScore({ level, steps, timeSeconds }) {
 class GameAudio {
   constructor() {
     this.backgroundVolume = 0.3;
-    this.introVolumeMultiplier = 10;
+    this.introTargetPeak = 0.095;
     this.duckedBackgroundVolume = 0.1;
     this.background = new Audio("assets/audio/row_echelon_music.mp3");
     this.background.loop = true;
     this.background.preload = "auto";
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
-      buttonUp: "assets/audio/intro/intro_button_up.wav",
-      soft: "assets/audio/intro/intro_key_soft.wav",
-      tick: "assets/audio/intro/intro_key_tick.wav",
+      click: "assets/audio/intro/intro_key_tick.wav?v=51",
+      finish: "assets/audio/intro/intro_button_up.wav?v=51",
     };
     this.introTemplates = Object.fromEntries(Object.entries(this.introFiles).map(([cue, source]) => {
       const player = new Audio(source);
@@ -205,6 +204,7 @@ class GameAudio {
     this.introPreloads = Object.values(this.introTemplates);
     this.introContext = null;
     this.introBuffers = new Map();
+    this.introGains = new Map();
     this.introLoadPromise = null;
     this.introSources = new Set();
     this.effects = new Set();
@@ -275,6 +275,14 @@ class GameAudio {
       if (!response.ok) throw new Error(`Unable to load intro sound: ${source}`);
       const buffer = await this.introContext.decodeAudioData(await response.arrayBuffer());
       this.introBuffers.set(cue, buffer);
+      let peak = 0;
+      for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+        const samples = buffer.getChannelData(channel);
+        for (let index = 0; index < samples.length; index += 1) {
+          peak = Math.max(peak, Math.abs(samples[index]));
+        }
+      }
+      this.introGains.set(cue, Math.min(8, this.introTargetPeak / Math.max(peak, 0.001)));
     })).catch(() => {}).finally(() => {
       this.introLoadPromise = null;
     });
@@ -286,19 +294,29 @@ class GameAudio {
     const buffer = this.introBuffers.get(cue);
     if (buffer && this.introContext) {
       const source = this.introContext.createBufferSource();
+      const highPass = this.introContext.createBiquadFilter();
       const gain = this.introContext.createGain();
       source.buffer = buffer;
-      gain.gain.value = this.backgroundVolume * this.introVolumeMultiplier;
-      source.connect(gain).connect(this.introContext.destination);
+      highPass.type = "highpass";
+      highPass.frequency.value = 450;
+      highPass.Q.value = 0.7;
+      const normalizedGain = this.introGains.get(cue) || 1;
+      const now = this.introContext.currentTime;
+      const releaseStart = now + Math.max(0.004, buffer.duration - 0.007);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(normalizedGain, now + 0.003);
+      gain.gain.setValueAtTime(normalizedGain, releaseStart);
+      gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
+      source.connect(highPass).connect(gain).connect(this.introContext.destination);
       this.introSources.add(source);
       source.onended = () => this.introSources.delete(source);
-      source.start();
+      source.start(now);
       return;
     }
     const template = this.introTemplates[cue];
     if (!template) return;
     const player = template.cloneNode(true);
-    player.volume = Math.min(1, this.backgroundVolume * this.introVolumeMultiplier);
+    player.volume = 1;
     this.effects.add(player);
     const cleanup = () => this.effects.delete(player);
     player.addEventListener("ended", cleanup, { once: true });
@@ -2058,7 +2076,7 @@ async function formIntroMatrix(token) {
     $(".intro-bracket.left"),
     "intro-bracket-enter-left",
     0.54,
-    "buttonUp",
+    "click",
     token,
   );
   $("#intro-matrix").setAttribute("aria-hidden", "false");
@@ -2104,7 +2122,7 @@ async function formIntroMatrix(token) {
   screen.classList.add("matrix-ready");
   $$(".intro-matrix-cell").forEach((cell) => cell.classList.add("landed"));
   $$(".intro-title-letter").forEach((letter) => letter.classList.add("landed"));
-  audio.playIntro("buttonUp");
+  audio.playIntro("click");
   return true;
 }
 
@@ -2149,7 +2167,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
     cell.classList.add("value-visible", "changing");
     if (!changeCuePlayed) {
       changeCuePlayed = true;
-      audio.playIntro(stepIndex % 2 ? "tick" : "soft");
+      audio.playIntro("click");
     }
     if (!introReducedMotion()) {
       await cell.animate(
@@ -2191,7 +2209,7 @@ async function launchIntroSolutions(token) {
     if (token !== state.introToken) return false;
     target.dataset.solutionValue = solution.value;
     target.classList.add("solution-landed");
-    audio.playIntro(index === 0 ? "soft" : index === 1 ? "tick" : "buttonUp");
+    audio.playIntro("click");
     if (!(await introDelay(150, token))) return false;
   }
   return true;
@@ -2216,20 +2234,20 @@ async function runIntroAnimation() {
   if (!state.introVisible || state.introRunning) return;
   state.introRunning = true;
   const token = state.introToken;
+  await audio.prepareIntroAudio();
+  if (token !== state.introToken || !state.introVisible) return;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
-  audio.playIntro("soft");
 
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
-  const expansionCues = ["soft", "tick", "buttonUp"];
-  $$("#intro-equations-expanded p").forEach((row, index) => {
+  $$("#intro-equations-expanded p").forEach((row) => {
     cueIntroAnimationAt(
       row.querySelector(".inserted"),
       "intro-insert-token",
       0.5,
-      expansionCues[index],
+      "click",
       token,
     );
   });
@@ -2254,17 +2272,10 @@ async function runIntroAnimation() {
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
   cueIntroAnimationAt(
-    $(".intro-bracket.left"),
-    "intro-bracket-lock-left",
-    0.34,
-    "buttonUp",
-    token,
-  );
-  cueIntroAnimationAt(
     $("#intro-rref-prefix"),
     "intro-r-pop",
     0.58,
-    "buttonUp",
+    "finish",
     token,
   );
   if (!(await introDelay(2100, token))) return;
