@@ -1897,7 +1897,7 @@ async function launchIntroSolutions(token) {
       duration: 0.14,
       gain: 0.035,
     });
-    if (!(await introDelay(105, token))) return false;
+    if (!(await introDelay(150, token))) return false;
   }
   return true;
 }
@@ -1909,7 +1909,7 @@ async function finishIntro({ skipped = false, token = state.introToken } = {}) {
   localStorage.setItem(INTRO_SEEN_KEY, "true");
   $("#intro-screen").classList.add("intro-finishing");
   document.body.classList.remove("intro-active");
-  await wait(introReducedMotion() || skipped ? 40 : 650);
+  await wait(introReducedMotion() || skipped ? 40 : 850);
   if (token !== state.introToken) return;
   $("#intro-screen").hidden = true;
   resetIntroDom();
@@ -1929,14 +1929,14 @@ async function runIntroAnimation() {
   prepareIntroAudio();
   playIntroTone({ frequency: 145, endFrequency: 235, duration: 0.42, gain: 0.035 });
 
-  if (!(await introDelay(420, token))) return;
+  if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
   playIntroTone({ frequency: 260, endFrequency: 390, duration: 0.22, gain: 0.028 });
 
-  if (!(await introDelay(1050, token))) return;
+  if (!(await introDelay(2100, token))) return;
   if (!(await formIntroMatrix(token))) return;
-  if (!(await introDelay(240, token))) return;
+  if (!(await introDelay(700, token))) return;
 
   for (let index = 0; index < INTRO_MATRIX_STEPS.length; index += 1) {
     if (!(await animateIntroMatrixStep(INTRO_MATRIX_STEPS[index], token, index))) return;
@@ -1944,17 +1944,17 @@ async function runIntroAnimation() {
   }
 
   $("#intro-operation").classList.remove("visible");
-  if (!(await introDelay(120, token))) return;
+  if (!(await introDelay(900, token))) return;
   $("#intro-operation").textContent = "SOLUTION LOCKED";
   $("#intro-operation").classList.add("visible");
   if (!(await launchIntroSolutions(token))) return;
-  if (!(await introDelay(300, token))) return;
+  if (!(await introDelay(500, token))) return;
 
   screen.classList.remove("matrix-impact");
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
   playIntroFinalClick();
-  if (!(await introDelay(980, token))) return;
+  if (!(await introDelay(2100, token))) return;
   await finishIntro({ token });
 }
 

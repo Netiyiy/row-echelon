@@ -78,9 +78,9 @@ body.intro-active .game-shell {
     linear-gradient(160deg, #2b1b15 0%, var(--cocoa) 52%, #241711 100%);
   opacity: 1;
   transition:
-    opacity 650ms cubic-bezier(0.7, 0, 0.84, 0),
-    filter 650ms ease,
-    transform 760ms cubic-bezier(0.7, 0, 0.84, 0);
+    opacity 850ms cubic-bezier(0.7, 0, 0.84, 0),
+    filter 850ms ease,
+    transform 960ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 .intro-screen::after {
