@@ -186,7 +186,7 @@ function calculateScore({ level, steps, timeSeconds }) {
 class GameAudio {
   constructor() {
     this.backgroundVolume = 0.3;
-    this.introTargetPeak = 0.095;
+    this.introTargetPeak = 0.16;
     this.introCueMultipliers = { click: 2, finish: 4 };
     this.duckedBackgroundVolume = 0.1;
     this.background = new Audio("assets/audio/row_echelon_music.mp3");
@@ -194,8 +194,8 @@ class GameAudio {
     this.background.preload = "auto";
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
-      click: "assets/audio/intro/intro_key_tick.wav?v=51",
-      finish: "assets/audio/intro/intro_button_up.wav?v=51",
+      click: "assets/audio/intro/intro_key_tick.wav?v=55",
+      finish: "assets/audio/intro/intro_button_up.wav?v=55",
     };
     this.introTemplates = Object.fromEntries(Object.entries(this.introFiles).map(([cue, source]) => {
       const player = new Audio(source);
@@ -203,7 +203,12 @@ class GameAudio {
       return [cue, player];
     }));
     this.introPreloads = Object.values(this.introTemplates);
+    this.preferIntroMediaElements = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    this.introMediaPrimed = false;
     this.introContext = null;
+    this.introUnlocked = false;
+    this.introUnlockPromise = null;
     this.introBuffers = new Map();
     this.introGains = new Map();
     this.introLoadPromise = null;
@@ -227,14 +232,75 @@ class GameAudio {
   }
 
   resumeFromUserGesture() {
-    if (document.hidden || !this.enabled) return;
+    if (document.hidden || !this.enabled) return Promise.resolve(false);
     this.userActivated = true;
     this.suspended = false;
+    const unlockPromise = this.preferIntroMediaElements
+      ? this.unlockIntroMediaElements()
+      : this.unlockIntroAudio();
     this.prepareIntroAudio();
-    if (this.introContext?.state === "suspended") {
-      this.introContext.resume().catch(() => {});
-    }
     this.startMusic();
+    return unlockPromise;
+  }
+
+  ensureIntroContext() {
+    if (this.introContext) return this.introContext;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return null;
+    try {
+      this.introContext = new AudioContext();
+      return this.introContext;
+    } catch {
+      return null;
+    }
+  }
+
+  unlockIntroAudio() {
+    const context = this.ensureIntroContext();
+    if (!context) return Promise.resolve(false);
+    if (this.introUnlockPromise) return this.introUnlockPromise;
+
+    this.introUnlockPromise = Promise.resolve(
+      context.state === "running" ? undefined : context.resume(),
+    ).then(() => {
+      if (context.state !== "running") return false;
+      if (!this.introUnlocked) {
+        const source = context.createBufferSource();
+        source.buffer = context.createBuffer(1, 1, context.sampleRate);
+        source.connect(context.destination);
+        source.start(0);
+        this.introUnlocked = true;
+      }
+      return true;
+    }).catch(() => false).finally(() => {
+      this.introUnlockPromise = null;
+    });
+    return this.introUnlockPromise;
+  }
+
+  unlockIntroMediaElements() {
+    if (!this.preferIntroMediaElements || this.introMediaPrimed) return Promise.resolve(false);
+    const attempts = this.introPreloads.map((player) => {
+      player.muted = true;
+      const playAttempt = player.play();
+      return Promise.resolve(playAttempt).then(() => {
+        player.pause();
+        try {
+          player.currentTime = 0;
+        } catch {
+          // Safari can reject a seek while media is still loading.
+        }
+        player.muted = false;
+        return true;
+      }).catch(() => {
+        player.muted = false;
+        return false;
+      });
+    });
+    return Promise.all(attempts).then((results) => {
+      this.introMediaPrimed = results.some(Boolean);
+      return this.introMediaPrimed;
+    });
   }
 
   play(effect) {
@@ -261,20 +327,16 @@ class GameAudio {
   }
 
   prepareIntroAudio() {
+    if (this.preferIntroMediaElements) return Promise.resolve();
     if (this.introLoadPromise || this.introBuffers.size === Object.keys(this.introFiles).length) {
       return this.introLoadPromise;
     }
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return null;
-    try {
-      this.introContext ||= new AudioContext();
-    } catch {
-      return null;
-    }
+    const context = this.ensureIntroContext();
+    if (!context) return null;
     this.introLoadPromise = Promise.all(Object.entries(this.introFiles).map(async ([cue, source]) => {
       const response = await fetch(source, { cache: "force-cache" });
       if (!response.ok) throw new Error(`Unable to load intro sound: ${source}`);
-      const buffer = await this.introContext.decodeAudioData(await response.arrayBuffer());
+      const buffer = await context.decodeAudioData(await response.arrayBuffer());
       this.introBuffers.set(cue, buffer);
       let peak = 0;
       for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
@@ -292,33 +354,58 @@ class GameAudio {
 
   playIntro(cue) {
     if (!this.enabled || this.suspended || document.hidden) return;
-    const buffer = this.introBuffers.get(cue);
-    if (buffer && this.introContext) {
-      const source = this.introContext.createBufferSource();
-      const highPass = this.introContext.createBiquadFilter();
-      const gain = this.introContext.createGain();
-      source.buffer = buffer;
-      highPass.type = "highpass";
-      highPass.frequency.value = 450;
-      highPass.Q.value = 0.7;
-      const normalizedGain = (this.introGains.get(cue) || 1)
-        * (this.introCueMultipliers[cue] || 1);
-      const now = this.introContext.currentTime;
-      const releaseStart = now + Math.max(0.004, buffer.duration - 0.007);
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(normalizedGain, now + 0.003);
-      gain.gain.setValueAtTime(normalizedGain, releaseStart);
-      gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
-      source.connect(highPass).connect(gain).connect(this.introContext.destination);
-      this.introSources.add(source);
-      source.onended = () => this.introSources.delete(source);
-      source.start(now);
+    if (this.preferIntroMediaElements) {
+      this.playIntroElement(cue);
       return;
     }
+    const buffer = this.introBuffers.get(cue);
+    if (buffer && this.introContext) {
+      if (this.introContext.state !== "running") {
+        this.introContext.resume().then(() => {
+          if (this.introContext.state === "running") this.playIntroBuffer(cue, buffer);
+          else this.playIntroElement(cue);
+        }).catch(() => this.playIntroElement(cue));
+        return;
+      }
+      this.playIntroBuffer(cue, buffer);
+      return;
+    }
+    this.playIntroElement(cue);
+  }
+
+  playIntroBuffer(cue, buffer) {
+    const source = this.introContext.createBufferSource();
+    const highPass = this.introContext.createBiquadFilter();
+    const gain = this.introContext.createGain();
+    source.buffer = buffer;
+    highPass.type = "highpass";
+    highPass.frequency.value = 450;
+    highPass.Q.value = 0.7;
+    const normalizedGain = (this.introGains.get(cue) || 1)
+      * (this.introCueMultipliers[cue] || 1);
+    const now = this.introContext.currentTime;
+    const releaseStart = now + Math.max(0.004, buffer.duration - 0.007);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(normalizedGain, now + 0.003);
+    gain.gain.setValueAtTime(normalizedGain, releaseStart);
+    gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
+    source.connect(highPass).connect(gain).connect(this.introContext.destination);
+    this.introSources.add(source);
+    source.onended = () => this.introSources.delete(source);
+    source.start(now);
+  }
+
+  playIntroElement(cue) {
     const template = this.introTemplates[cue];
     if (!template) return;
-    const player = template.cloneNode(true);
+    const player = this.preferIntroMediaElements ? template : template.cloneNode(true);
+    player.muted = false;
     player.volume = 1;
+    try {
+      player.currentTime = 0;
+    } catch {
+      // Safari can reject a seek while media is still loading.
+    }
     this.effects.add(player);
     const cleanup = () => this.effects.delete(player);
     player.addEventListener("ended", cleanup, { once: true });
@@ -2232,11 +2319,11 @@ async function finishIntro({ skipped = false, token = state.introToken } = {}) {
   resumeLevelTimer();
 }
 
-async function runIntroAnimation() {
+async function runIntroAnimation({ audioUnlock = null } = {}) {
   if (!state.introVisible || state.introRunning) return;
   state.introRunning = true;
   const token = state.introToken;
-  await audio.prepareIntroAudio();
+  await Promise.all([audio.prepareIntroAudio(), audioUnlock]);
   if (token !== state.introToken || !state.introVisible) return;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
@@ -2284,7 +2371,7 @@ async function runIntroAnimation() {
   await finishIntro({ token });
 }
 
-function showIntro({ autoplay = false } = {}) {
+function showIntro({ autoplay = false, audioUnlock = null } = {}) {
   state.introToken += 1;
   state.introVisible = true;
   state.introRunning = false;
@@ -2293,7 +2380,7 @@ function showIntro({ autoplay = false } = {}) {
   resetIntroDom();
   $("#intro-screen").hidden = false;
   document.body.classList.add("intro-active");
-  if (autoplay) runIntroAnimation();
+  if (autoplay) runIntroAnimation({ audioUnlock });
 }
 
 $$(".operation-button").forEach((button) => {
@@ -2331,14 +2418,14 @@ $("#replay-intro-button").addEventListener("click", () => {
   audio.play("tap");
   state.settingsOpen = false;
   renderSettings();
-  audio.resumeFromUserGesture();
-  showIntro({ autoplay: true });
+  const audioUnlock = audio.resumeFromUserGesture();
+  showIntro({ autoplay: true, audioUnlock });
 });
 $("#logout-button").addEventListener("click", logoutPlayer);
 $("#intro-begin").addEventListener("click", (event) => {
   event.stopPropagation();
-  audio.resumeFromUserGesture();
-  runIntroAnimation();
+  const audioUnlock = audio.resumeFromUserGesture();
+  runIntroAnimation({ audioUnlock });
 });
 $("#intro-skip").addEventListener("click", (event) => {
   event.stopPropagation();
