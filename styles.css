@@ -475,7 +475,8 @@ h1 {
 }
 
 .leaderboard-date {
-  margin: 6px 0 0;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .leaderboard-title {
@@ -484,7 +485,7 @@ h1 {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.16em;
-  text-align: center;
+  text-align: left;
 }
 
 .leaderboard-list {
@@ -766,6 +767,7 @@ h1 {
   box-shadow: 0 18px 38px rgb(0 0 0 / 30%);
 }
 
+.settings-action,
 .logout-button {
   width: 100%;
   min-height: 34px;
@@ -778,6 +780,12 @@ h1 {
   letter-spacing: 0.08em;
 }
 
+.settings-action {
+  margin-bottom: 6px;
+}
+
+.settings-action:hover,
+.settings-action:focus-visible,
 .logout-button:hover,
 .logout-button:focus-visible {
   border-color: var(--accent);
@@ -901,6 +909,17 @@ h1 {
       )
       scale(1)
       rotate(var(--confetti-rotate));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 }
 

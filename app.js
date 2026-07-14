@@ -98,6 +98,7 @@ const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
+const SOUND_KEY = "rowEchelonSoundEnabled";
 const SCORING = Object.freeze({
   A: 300,
   P: 1.22,
@@ -160,31 +161,48 @@ class GameAudio {
     this.effects = new Set();
     this.fadeFrame = null;
     this.restoreTimer = null;
+    this.enabled = localStorage.getItem(SOUND_KEY) !== "false";
+    this.userActivated = false;
+    this.suspended = document.hidden;
   }
 
   startMusic() {
+    if (!this.enabled || !this.userActivated || this.suspended || document.hidden) return;
     if (!this.background.paused) return;
-    this.background.play().catch(() => {});
+    this.background.muted = false;
+    this.background.play()
+      .then(() => this.updateMediaSession("playing"))
+      .catch(() => {});
+  }
+
+  resumeFromUserGesture() {
+    if (document.hidden || !this.enabled) return;
+    this.userActivated = true;
+    this.suspended = false;
+    this.startMusic();
   }
 
   play(effect) {
     this.startMusic();
+    if (!this.enabled || this.suspended || document.hidden) return;
     const isCelebration = effect === "complete" || effect === "rank";
     const fileName = effect === "rank" ? "complete" : effect;
     const extension = isCelebration ? "mp3" : "wav";
     const player = new Audio(`assets/audio/ui_${fileName}.${extension}`);
     player.volume = effect === "complete" ? 0.68 : effect === "rank" ? 0.46 : 0.55;
     this.effects.add(player);
-    player.addEventListener("ended", () => {
+    const cleanup = () => {
       this.effects.delete(player);
       if (isCelebration) {
         this.fadeBackgroundTo(this.backgroundVolume, 800);
       }
-    });
+    };
+    player.addEventListener("ended", cleanup, { once: true });
+    player.addEventListener("error", cleanup, { once: true });
     if (isCelebration) {
       this.duckMusic();
     }
-    player.play().catch(() => {});
+    player.play().catch(cleanup);
   }
 
   duckMusic() {
@@ -196,6 +214,7 @@ class GameAudio {
   }
 
   fadeBackgroundTo(targetVolume, duration) {
+    if (this.suspended || !this.enabled || document.hidden) return;
     if (this.fadeFrame) window.cancelAnimationFrame(this.fadeFrame);
     const startVolume = this.background.volume;
     const startedAt = performance.now();
@@ -210,6 +229,47 @@ class GameAudio {
       }
     };
     this.fadeFrame = window.requestAnimationFrame(tick);
+  }
+
+  suspend() {
+    this.suspended = true;
+    window.clearTimeout(this.restoreTimer);
+    this.restoreTimer = null;
+    if (this.fadeFrame) {
+      window.cancelAnimationFrame(this.fadeFrame);
+      this.fadeFrame = null;
+    }
+    this.background.pause();
+    this.background.muted = true;
+    for (const player of this.effects) {
+      player.pause();
+      try {
+        player.currentTime = 0;
+      } catch {
+        // Safari can reject a seek while media is still loading.
+      }
+    }
+    this.effects.clear();
+    this.updateMediaSession("paused");
+  }
+
+  setEnabled(enabled) {
+    this.enabled = Boolean(enabled);
+    localStorage.setItem(SOUND_KEY, String(this.enabled));
+    if (!this.enabled) {
+      this.suspend();
+      return;
+    }
+    this.resumeFromUserGesture();
+  }
+
+  updateMediaSession(playbackState) {
+    if (!("mediaSession" in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = playbackState;
+    } catch {
+      // Older Safari versions expose Media Session without a writable state.
+    }
   }
 }
 
@@ -386,7 +446,7 @@ function reducedRowEchelonForm(source) {
 
 function currentElapsedSeconds() {
   if (!state.levelStartedAt) return state.elapsedSeconds;
-  return Math.max(0, Math.floor((performance.now() - state.levelStartedAt) / 1000));
+  return Math.max(0, state.elapsedSeconds + ((performance.now() - state.levelStartedAt) / 1000));
 }
 
 function updateTimerLabel(seconds = currentElapsedSeconds()) {
@@ -401,24 +461,42 @@ function clearLevelTimer() {
   state.levelStartedAt = 0;
 }
 
-function startLevelTimer() {
+function runLevelTimer() {
   clearLevelTimer();
-  state.elapsedSeconds = 0;
   state.levelStartedAt = performance.now();
-  updateTimerLabel(0);
+  updateTimerLabel(state.elapsedSeconds);
   state.timerId = window.setInterval(() => {
     if (state.isSolved) return;
-    state.elapsedSeconds = currentElapsedSeconds();
-    updateTimerLabel(state.elapsedSeconds);
+    updateTimerLabel(currentElapsedSeconds());
   }, 250);
+}
+
+function startLevelTimer() {
+  state.elapsedSeconds = 0;
+  runLevelTimer();
+}
+
+function pauseLevelTimer() {
+  if (!state.levelStartedAt) return;
+  state.elapsedSeconds = currentElapsedSeconds();
+  clearLevelTimer();
+  updateTimerLabel(state.elapsedSeconds);
+}
+
+function resumeLevelTimer() {
+  if (
+    document.hidden
+    || state.levelStartedAt
+    || state.isSolved
+    || state.leaderboardVisible
+    || !signedIn()
+  ) return;
+  runLevelTimer();
 }
 
 function stopLevelTimer() {
   if (state.levelStartedAt) {
-    state.elapsedSeconds = Math.max(
-      1,
-      Math.ceil((performance.now() - state.levelStartedAt) / 1000),
-    );
+    state.elapsedSeconds = Math.max(1, Math.ceil(currentElapsedSeconds()));
   }
   clearLevelTimer();
   updateTimerLabel(state.elapsedSeconds);
@@ -439,8 +517,13 @@ function renderAccount() {
 }
 
 function renderSettings() {
-  $("#settings-button").classList.toggle("active", state.settingsOpen);
+  const settingsButton = $("#settings-button");
+  settingsButton.classList.toggle("active", state.settingsOpen);
+  settingsButton.setAttribute("aria-expanded", String(state.settingsOpen));
   $("#settings-menu").hidden = !state.settingsOpen;
+  const soundButton = $("#sound-button");
+  soundButton.textContent = audio.enabled ? "SOUND ON" : "SOUND OFF";
+  soundButton.setAttribute("aria-pressed", String(audio.enabled));
   $("#logout-button").disabled = !signedIn();
 }
 
@@ -464,6 +547,16 @@ function leaderboardRows() {
     rows.push(state.playerEntry);
   }
   return rows;
+}
+
+function movedHigherInRank(previousRank, currentRank) {
+  const previous = Number(previousRank);
+  const current = Number(currentRank);
+  return Number.isInteger(previous)
+    && Number.isInteger(current)
+    && previous > 0
+    && current > 0
+    && current < previous;
 }
 
 function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
@@ -513,10 +606,12 @@ function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
       }
 
       row.className = `leaderboard-row${entry.isCurrentPlayer ? " current-player" : ""}`;
-      if (rankImproved && entry.isCurrentPlayer && previousRank && previousRank > entry.rank) {
+      if (rankImproved && entry.isCurrentPlayer && movedHigherInRank(previousRank, entry.rank)) {
         row.classList.add("rank-up");
         row.style.setProperty("--rank-shift", `${Math.min(previousRank - entry.rank, 6) * 38}px`);
+        row.setAttribute("aria-label", `Rank improved from ${previousRank} to ${entry.rank}`);
       }
+      if (entry.isCurrentPlayer) row.setAttribute("aria-current", "true");
 
       const rank = document.createElement("span");
       rank.className = "leaderboard-rank";
@@ -698,7 +793,7 @@ async function showLeaderboardStage() {
   }
 
   await animateLeaderboardRows(token);
-  launchLeaderboardConfetti();
+  launchLeaderboardConfetti(result.rankImproved);
 }
 
 async function goToNextLevel() {
@@ -765,10 +860,11 @@ function clearPlayerAndLock(message) {
   render();
 }
 
-function launchLeaderboardConfetti() {
+function launchLeaderboardConfetti(rankImproved) {
   const layer = $("#leaderboard-confetti");
   if (!layer) return;
   layer.replaceChildren();
+  if (!rankImproved || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   for (let index = 0; index < 36; index += 1) {
     const piece = document.createElement("span");
     piece.className = "leaderboard-confetti-piece";
@@ -806,10 +902,8 @@ async function submitCompletedLevel(scoreBreakdown) {
       },
     });
     const currentRank = data.playerEntry?.rank || data.rank;
-    const knownPreviousRank = data.previousRank || previousRank;
-    const rankImproved = Boolean(
-      data.rankImproved || (knownPreviousRank && currentRank && currentRank < knownPreviousRank),
-    );
+    const knownPreviousRank = data.previousRank ?? previousRank;
+    const rankImproved = movedHigherInRank(knownPreviousRank, currentRank);
     const finalBreakdown = data.scoreBreakdown || scoreBreakdown;
     const totalScore = data.playerEntry?.totalScore ?? finalBreakdown.score;
     state.leaderboardMessage = rankImproved
@@ -1169,6 +1263,10 @@ $("#settings-button").addEventListener("click", (event) => {
   renderSettings();
 });
 $("#settings-menu").addEventListener("click", (event) => event.stopPropagation());
+$("#sound-button").addEventListener("click", () => {
+  audio.setEnabled(!audio.enabled);
+  renderSettings();
+});
 $("#logout-button").addEventListener("click", logoutPlayer);
 $("#factor-input").addEventListener("focus", (event) => {
   if (state.isSolved) {
@@ -1198,7 +1296,24 @@ document.addEventListener("keydown", (event) => {
   state.settingsOpen = false;
   renderSettings();
 });
-document.addEventListener("pointerdown", () => audio.startMusic(), { once: true });
+document.addEventListener("pointerdown", () => audio.resumeFromUserGesture());
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    audio.suspend();
+    pauseLevelTimer();
+    return;
+  }
+  resumeLevelTimer();
+});
+window.addEventListener("pagehide", () => {
+  audio.suspend();
+  pauseLevelTimer();
+});
+window.addEventListener("pageshow", () => resumeLevelTimer());
+document.addEventListener("freeze", () => {
+  audio.suspend();
+  pauseLevelTimer();
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

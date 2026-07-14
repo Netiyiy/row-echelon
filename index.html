@@ -9,8 +9,9 @@
     <meta name="apple-mobile-web-app-title" content="Row Echelon" />
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="styles.css?v=22" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
@@ -110,26 +111,32 @@
               </div>
             </div>
             <p id="result-message" class="result-message" aria-live="polite"></p>
+            <p id="rank-summary" class="rank-summary" aria-live="polite"></p>
           </div>
 
           <div id="leaderboard-view" class="result-view leaderboard-view" hidden>
-            <p class="leaderboard-title">DAILY LEADERBOARD</p>
+            <div class="leaderboard-heading">
+              <p class="leaderboard-title">DAILY LEADERBOARD</p>
+              <span id="leaderboard-date" class="leaderboard-date"></span>
+            </div>
             <ol id="leaderboard-list" class="leaderboard-list"></ol>
+            <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
           </div>
         </div>
         <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
         <button id="next-level-button" class="next-level-button" type="button">NEXT</button>
       </section>
 
-      <button id="settings-button" class="settings-button" type="button" aria-label="Settings">
+      <button id="settings-button" class="settings-button" type="button" aria-label="Settings" aria-controls="settings-menu" aria-expanded="false">
         <span aria-hidden="true">⚙</span>
       </button>
-      <div id="settings-menu" class="settings-menu" hidden>
+      <div id="settings-menu" class="settings-menu" role="group" aria-label="Settings" hidden>
+        <button id="sound-button" class="settings-action" type="button" aria-pressed="true">SOUND ON</button>
         <button id="logout-button" class="logout-button" type="button">LOG OUT</button>
       </div>
-      <span class="version-label" aria-label="Version">v23</span>
+      <span class="version-label" aria-label="Version">v24</span>
     </main>
 
-    <script src="app.js?v=17" defer></script>
+    <script src="app.js?v=18" defer></script>
   </body>
 </html>
