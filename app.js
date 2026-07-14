@@ -301,6 +301,8 @@ const state = {
   accountMessage: "",
   celebrationToken: 0,
   settingsOpen: false,
+  settingsMessage: "",
+  endingSession: false,
 };
 
 function loadPlayerSession() {
@@ -524,7 +526,10 @@ function renderSettings() {
   const soundButton = $("#sound-button");
   soundButton.textContent = audio.enabled ? "SOUND ON" : "SOUND OFF";
   soundButton.setAttribute("aria-pressed", String(audio.enabled));
-  $("#logout-button").disabled = !signedIn();
+  const logoutButton = $("#logout-button");
+  logoutButton.disabled = !signedIn() || state.endingSession;
+  logoutButton.textContent = state.endingSession ? "ENDING..." : "END SESSION";
+  $("#settings-message").textContent = state.settingsMessage;
 }
 
 function renderResultsStage() {
@@ -1035,6 +1040,8 @@ function clearPlayerAndLock(message) {
   clearLevelTimer();
   clearPlayerSession();
   state.settingsOpen = false;
+  state.settingsMessage = "";
+  state.endingSession = false;
   state.leaderboard = [];
   state.playerEntry = null;
   state.leaderboardDate = "";
@@ -1386,10 +1393,27 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
   return true;
 }
 
-function logoutPlayer() {
-  if (!signedIn()) return;
+async function logoutPlayer() {
+  if (!signedIn() || state.endingSession) return;
   audio.play("tap");
-  clearPlayerAndLock("Logged out. Choose a name to play.");
+  state.endingSession = true;
+  state.settingsMessage = "Ending session...";
+  renderSettings();
+  try {
+    await apiRequest("/api/logout", { method: "POST", auth: true });
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearPlayerAndLock("Session ended. Choose a name to play.");
+      startLevel(1);
+      return;
+    }
+    state.endingSession = false;
+    state.settingsMessage = `Could not end session: ${error.message}`;
+    renderSettings();
+    return;
+  }
+  state.endingSession = false;
+  clearPlayerAndLock("Session ended. Your username is available again.");
   startLevel(1);
 }
 

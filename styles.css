@@ -772,7 +772,7 @@ h1 {
   z-index: 15;
   left: max(20px, 6vw);
   bottom: calc(env(safe-area-inset-bottom) + 54px);
-  width: 112px;
+  width: 148px;
   padding: 8px;
   border: 1px solid rgb(163 110 79 / 66%);
   border-radius: 13px;
@@ -808,6 +808,14 @@ h1 {
 
 .logout-button:disabled {
   opacity: 0.45;
+}
+
+.settings-message {
+  margin: 6px 2px 0;
+  color: var(--muted-cream);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .version-label {

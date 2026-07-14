@@ -8,6 +8,13 @@ const SCORING = Object.freeze({
   B: 7,
   C: 1.25,
 });
+const BLOCKED_NAME_FRAGMENTS = Object.freeze([
+  "fuck", "fuk", "phuck", "shit", "bitch", "cunt", "pussy", "whore",
+  "slut", "penis", "vagina", "nigger", "nigga", "faggot", "retard", "porn",
+]);
+const BLOCKED_NAME_WORDS = new Set([
+  "ass", "cock", "dick", "rape", "sex",
+]);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +53,7 @@ type PlayerRow = {
   id: string;
   name: string;
   created_at: string;
-  token_hash?: string;
+  token_hash: string;
 };
 
 type DailyScoreRow = {
@@ -85,12 +92,32 @@ function normalizeName(value: unknown) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
+function moderationText(value: unknown) {
+  const substitutions: Record<string, string> = {
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g",
+  };
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[01345789]/g, (character) => substitutions[character]);
+}
+
+function isBlockedName(name: string) {
+  const moderated = moderationText(name);
+  const compact = moderated.replace(/[^a-z]/g, "");
+  const words = moderated.split(/[^a-z]+/).filter(Boolean);
+  return BLOCKED_NAME_FRAGMENTS.some((term) => compact.includes(term))
+    || words.some((word) => BLOCKED_NAME_WORDS.has(word));
+}
+
 function validateName(name: string) {
   if (name.length < 2 || name.length > 18) {
     throw new HttpError(400, "Name must be 2-18 characters.");
   }
   if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
     throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
+  }
+  if (isBlockedName(name)) {
+    throw new HttpError(400, "Choose a different username.");
   }
 }
 
@@ -278,7 +305,7 @@ async function createAccount(request: Request) {
 
   if (error) {
     if (error.code === "23505") {
-      throw new HttpError(409, "That player name is already taken.");
+      throw new HttpError(409, "Username is taken.");
     }
     throw error;
   }
@@ -287,6 +314,22 @@ async function createAccount(request: Request) {
     player: publicPlayer(data as PlayerRow),
     token,
   }, 201);
+}
+
+async function endSession(request: Request) {
+  const player = await requirePlayer(request);
+  const releasedKey = `ended:${player.id}`;
+  const { error } = await supabase
+    .from("row_echelon_players")
+    .update({
+      name_key: releasedKey,
+      token_hash: releasedKey,
+    })
+    .eq("id", player.id)
+    .eq("token_hash", player.token_hash);
+
+  if (error) throw error;
+  return json({ ok: true });
 }
 
 async function getLeaderboard(request: Request, url: URL) {
@@ -418,6 +461,9 @@ Deno.serve(async (request) => {
     }
     if (request.method === "POST" && path === "/api/complete") {
       return await completeLevel(request);
+    }
+    if (request.method === "POST" && path === "/api/logout") {
+      return await endSession(request);
     }
 
     throw new HttpError(404, "Not found.");

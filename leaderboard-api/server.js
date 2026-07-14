@@ -15,6 +15,13 @@ const SCORING = Object.freeze({
   B: 7,
   C: 1.25,
 });
+const BLOCKED_NAME_FRAGMENTS = Object.freeze([
+  "fuck", "fuk", "phuck", "shit", "bitch", "cunt", "pussy", "whore",
+  "slut", "penis", "vagina", "nigger", "nigga", "faggot", "retard", "porn",
+]);
+const BLOCKED_NAME_WORDS = new Set([
+  "ass", "cock", "dick", "rape", "sex",
+]);
 
 let writeQueue = Promise.resolve();
 
@@ -70,7 +77,7 @@ async function writeDb(db) {
 }
 
 function updateDb(callback) {
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => undefined).then(async () => {
     const db = await readDb();
     const result = await callback(db);
     await writeDb(db);
@@ -83,12 +90,30 @@ function normalizeName(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
+function moderationText(value) {
+  const substitutions = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g" };
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[01345789]/g, (character) => substitutions[character]);
+}
+
+function isBlockedName(name) {
+  const moderated = moderationText(name);
+  const compact = moderated.replace(/[^a-z]/g, "");
+  const words = moderated.split(/[^a-z]+/).filter(Boolean);
+  return BLOCKED_NAME_FRAGMENTS.some((term) => compact.includes(term))
+    || words.some((word) => BLOCKED_NAME_WORDS.has(word));
+}
+
 function validateName(name) {
   if (name.length < 2 || name.length > 18) {
     throw new HttpError(400, "Name must be 2-18 characters.");
   }
   if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
     throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
+  }
+  if (isBlockedName(name)) {
+    throw new HttpError(400, "Choose a different username.");
   }
 }
 
@@ -198,8 +223,10 @@ async function createAccount(request) {
   validateName(name);
 
   return updateDb(async (db) => {
-    const taken = db.players.some((player) => player.name.toLowerCase() === name.toLowerCase());
-    if (taken) throw new HttpError(409, "That player name is already taken.");
+    const taken = db.players.some((player) =>
+      !player.sessionEndedAt && player.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (taken) throw new HttpError(409, "Username is taken.");
 
     const token = crypto.randomBytes(32).toString("base64url");
     const player = {
@@ -213,6 +240,15 @@ async function createAccount(request) {
       player: publicPlayer(player),
       token,
     };
+  });
+}
+
+async function endSession(request) {
+  return updateDb(async (db) => {
+    const player = requirePlayer(db, request);
+    player.tokenHash = `ended:${player.id}`;
+    player.sessionEndedAt = Date.now();
+    return { ok: true };
   });
 }
 
@@ -322,6 +358,10 @@ async function handleRequest(request, response) {
   }
   if (request.method === "POST" && url.pathname === "/api/complete") {
     send(response, 200, await completeLevel(request));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/logout") {
+    send(response, 200, await endSession(request));
     return;
   }
 
