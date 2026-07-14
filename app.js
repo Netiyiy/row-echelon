@@ -1772,6 +1772,7 @@ async function logoutPlayer() {
     if (isAuthError(error)) {
       clearPlayerAndLock("Session ended. Choose a name to play.");
       startLevel(1);
+      showIntro();
       return;
     }
     state.endingSession = false;
@@ -1782,6 +1783,7 @@ async function logoutPlayer() {
   state.endingSession = false;
   clearPlayerAndLock("Session ended. Your username is available again.");
   startLevel(1);
+  showIntro();
 }
 
 async function createAccount() {
