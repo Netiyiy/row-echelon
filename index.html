@@ -10,7 +10,7 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=16" />
+    <link rel="stylesheet" href="styles.css?v=17" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
@@ -84,44 +84,43 @@
 
       <section id="results-screen" class="results-screen" aria-label="Level results" hidden>
         <div class="results-card">
-          <div class="leaderboard-heading">
-            <p class="eyebrow">LEVEL COMPLETE</p>
-            <span id="player-label" class="player-label">NO PLAYER</span>
-          </div>
+          <div id="score-view" class="result-view score-view">
+            <div class="leaderboard-heading">
+              <p class="eyebrow">SCORE CALCULATION</p>
+              <span id="player-label" class="player-label">NO PLAYER</span>
+            </div>
 
-          <div class="result-score-wrap">
-            <span id="result-score" class="result-score">0</span>
-            <span class="result-score-label">PTS</span>
-          </div>
+            <div class="result-score-wrap">
+              <span id="result-score" class="result-score">0</span>
+              <span class="result-score-label">PTS</span>
+            </div>
 
-          <div class="result-stats" aria-label="Score breakdown">
-            <div class="result-stat" data-result-item>
-              <span>Level reward</span>
-              <strong id="result-reward">+0</strong>
-            </div>
-            <div class="result-stat" data-result-item>
-              <span>Step penalty</span>
-              <strong id="result-step-penalty">-0</strong>
-            </div>
-            <div class="result-stat" data-result-item>
-              <span>Time penalty</span>
-              <strong id="result-time-penalty">-0</strong>
-            </div>
-            <div class="result-stat" data-result-item>
-              <span>Level stats</span>
-              <strong id="result-level-stats">0 steps • 0:00</strong>
+            <div class="result-stats" aria-label="Score breakdown">
+              <div class="result-stat" data-result-item>
+                <span>Level reward</span>
+                <strong id="result-reward">+0</strong>
+              </div>
+              <div class="result-stat" data-result-item>
+                <span>Step penalty</span>
+                <strong id="result-step-penalty">-0</strong>
+              </div>
+              <div class="result-stat" data-result-item>
+                <span>Time penalty</span>
+                <strong id="result-time-penalty">-0</strong>
+              </div>
             </div>
           </div>
 
-          <p id="rank-summary" class="rank-summary" aria-live="polite"></p>
-
-          <div class="leaderboard-heading leaderboard-heading-spaced">
-            <p class="eyebrow">DAILY LEADERBOARD</p>
-            <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
+          <div id="leaderboard-view" class="result-view leaderboard-view" hidden>
+            <div class="leaderboard-heading">
+              <p class="eyebrow">DAILY LEADERBOARD</p>
+              <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
+            </div>
+            <p id="rank-summary" class="rank-summary" aria-live="polite"></p>
+            <ol id="leaderboard-list" class="leaderboard-list"></ol>
+            <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
+            <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
           </div>
-          <ol id="leaderboard-list" class="leaderboard-list"></ol>
-          <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
-          <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
         </div>
         <button id="next-level-button" class="next-level-button" type="button">NEXT</button>
       </section>
@@ -132,9 +131,9 @@
       <div id="settings-menu" class="settings-menu" hidden>
         <button id="logout-button" class="logout-button" type="button">LOG OUT</button>
       </div>
-      <span class="version-label" aria-label="Version">v18</span>
+      <span class="version-label" aria-label="Version">v19</span>
     </main>
 
-    <script src="app.js?v=14" defer></script>
+    <script src="app.js?v=15" defer></script>
   </body>
 </html>

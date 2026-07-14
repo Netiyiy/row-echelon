@@ -237,6 +237,7 @@ const state = {
   leaderboardDate: "",
   leaderboardMessage: "",
   leaderboardVisible: false,
+  resultsStage: "score",
   accountMessage: "",
   celebrationToken: 0,
   settingsOpen: false,
@@ -443,6 +444,16 @@ function renderSettings() {
   $("#logout-button").disabled = !signedIn();
 }
 
+function renderResultsStage() {
+  const screen = $("#results-screen");
+  const isLeaderboardStage = state.resultsStage === "leaderboard";
+  $("#score-view").hidden = !state.leaderboardVisible || isLeaderboardStage;
+  $("#leaderboard-view").hidden = !state.leaderboardVisible || !isLeaderboardStage;
+  $("#next-level-button").textContent = isLeaderboardStage ? "NEXT LEVEL" : "NEXT";
+  screen.classList.toggle("score-stage", state.leaderboardVisible && !isLeaderboardStage);
+  screen.classList.toggle("leaderboard-stage", state.leaderboardVisible && isLeaderboardStage);
+}
+
 function leaderboardRows() {
   const rows = [...state.leaderboard];
   if (
@@ -459,9 +470,10 @@ function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
   const screen = $("#results-screen");
   screen.hidden = !state.leaderboardVisible;
   if (!state.leaderboardVisible) {
-    screen.classList.remove("visible", "exiting");
+    screen.classList.remove("visible", "exiting", "score-stage", "leaderboard-stage");
   }
   $(".game-shell").classList.toggle("leaderboard-visible", state.leaderboardVisible);
+  renderResultsStage();
 
   $("#leaderboard-date").textContent = state.leaderboardDate
     ? `TODAY ${state.leaderboardDate}`
@@ -564,8 +576,6 @@ function prepareResultCard(result = {}) {
   $("#result-reward").textContent = "+0";
   $("#result-step-penalty").textContent = "-0";
   $("#result-time-penalty").textContent = "-0";
-  $("#result-level-stats").textContent =
-    `L${breakdown.level} • ${breakdown.steps} steps • ${formatTime(breakdown.timeSeconds)}`;
 
   renderRankSummary(result);
   renderLeaderboard({
@@ -609,7 +619,7 @@ function animateNumber(element, to, {
 async function animateResults(result, token) {
   const breakdown = result.scoreBreakdown || state.resultScoreBreakdown;
   const items = $$("#results-screen [data-result-item]");
-  const [reward, stepPenalty, timePenalty, stats] = items;
+  const [reward, stepPenalty, timePenalty] = items;
 
   await wait(190);
   if (token !== state.resultAnimationToken) return;
@@ -626,24 +636,24 @@ async function animateResults(result, token) {
   timePenalty.classList.add("revealed");
   await animateNumber($("#result-time-penalty"), breakdown.timePenalty, { prefix: "-", token });
 
-  await wait(110);
-  if (token !== state.resultAnimationToken) return;
-  stats.classList.add("revealed");
-
   await wait(180);
   if (token !== state.resultAnimationToken) return;
   await animateNumber($("#result-score"), breakdown.score, { duration: 900, token });
+}
 
+async function animateLeaderboardRows(token) {
   const rows = $$("#results-screen .leaderboard-row, #results-screen .leaderboard-empty, #results-screen .leaderboard-gap");
+  await wait(90);
   for (const row of rows) {
     if (token !== state.resultAnimationToken) return;
     row.classList.add("revealed");
-    await wait(90);
+    await wait(130);
   }
 }
 
 async function showResults(result, celebrationToken) {
   state.leaderboardVisible = true;
+  state.resultsStage = "score";
   state.resultAnimationToken += 1;
   const animationToken = state.resultAnimationToken;
   prepareResultCard(result);
@@ -655,17 +665,34 @@ async function showResults(result, celebrationToken) {
     screen.classList.add("visible");
   });
 
+  await animateResults(result, animationToken);
+  if (celebrationToken !== state.celebrationToken) return;
+}
+
+async function showLeaderboardStage() {
+  if (!state.leaderboardVisible) return;
+  state.resultsStage = "leaderboard";
+  const token = ++state.resultAnimationToken;
+  const result = state.lastLeaderboardResult || {};
+  renderLeaderboard({
+    rankImproved: result.rankImproved,
+    previousRank: result.previousRank,
+  });
+
   if (result.rankImproved) {
     audio.play("rank");
     launchLeaderboardConfetti();
   }
 
-  await animateResults(result, animationToken);
-  if (celebrationToken !== state.celebrationToken) return;
+  await animateLeaderboardRows(token);
 }
 
 async function goToNextLevel() {
   if (!state.leaderboardVisible) return;
+  if (state.resultsStage !== "leaderboard") {
+    await showLeaderboardStage();
+    return;
+  }
   const token = ++state.resultAnimationToken;
   const screen = $("#results-screen");
   screen.classList.add("exiting");
@@ -676,6 +703,7 @@ async function goToNextLevel() {
   if (token !== state.resultAnimationToken) return;
 
   state.leaderboardVisible = false;
+  state.resultsStage = "score";
   state.lastLeaderboardResult = null;
   state.resultScoreBreakdown = null;
   $(".game-shell").classList.remove("leaderboard-visible", "results-next");
@@ -716,6 +744,7 @@ function clearPlayerAndLock(message) {
   state.leaderboardDate = "";
   state.leaderboardMessage = "";
   state.leaderboardVisible = false;
+  state.resultsStage = "score";
   state.accountMessage = message;
   state.resultAnimationToken += 1;
   state.celebrationToken += 1;
@@ -853,6 +882,7 @@ function startLevel(level) {
   state.resultScoreBreakdown = null;
   state.lastLeaderboardResult = null;
   state.leaderboardVisible = false;
+  state.resultsStage = "score";
   $(".game-shell").classList.remove("leaderboard-visible", "results-next");
   $("#sparkle-layer").replaceChildren();
   render();
@@ -925,6 +955,7 @@ function resetLevel() {
   state.steps = 0;
   state.elapsedSeconds = 0;
   state.leaderboardVisible = false;
+  state.resultsStage = "score";
   render();
   if (signedIn()) {
     startLevelTimer();
