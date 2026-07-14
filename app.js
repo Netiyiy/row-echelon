@@ -99,7 +99,7 @@ const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clo
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
 const SOUND_KEY = "rowEchelonSoundEnabled";
-const INTRO_SEEN_KEY = "rowEchelonIntroSeenV1";
+const INTRO_SEEN_KEY = "rowEchelonIntroSeenV2";
 const INTRO_MATRIX_STEPS = Object.freeze([
   {
     label: "GIVEN OUTPUTS",
@@ -1559,6 +1559,8 @@ function resetIntroDom() {
     "intro-running",
     "intro-expanded",
     "matrix-forming",
+    "matrix-ready",
+    "matrix-impact",
     "rref-complete",
     "intro-finishing",
   );
@@ -1588,7 +1590,7 @@ function introDelay(duration, token) {
 
 async function flyIntroToken(source, target, {
   kind = "number",
-  duration = 760,
+  duration = 480,
   delay = 0,
   arc = -30,
 } = {}) {
@@ -1611,18 +1613,23 @@ async function flyIntroToken(source, target, {
   const animation = flyer.animate(
     [
       { opacity: 0, transform: "translate(0, 0) scale(0.72)" },
-      { opacity: 1, offset: 0.12, transform: "translate(0, 0) scale(1)" },
+      { opacity: 1, offset: 0.1, transform: "translate(0, 0) scale(1)" },
       {
         opacity: 1,
-        offset: 0.68,
-        transform: `translate(${deltaX * 0.68}px, ${deltaY * 0.68 + arc}px) scale(1.08)`,
+        offset: 0.28,
+        transform: `translate(${deltaX * -0.035}px, ${deltaY * -0.035}px) scale(1.12)`,
       },
-      { opacity: 0, transform: `translate(${deltaX}px, ${deltaY}px) scale(0.76)` },
+      {
+        opacity: 1,
+        offset: 0.76,
+        transform: `translate(${deltaX * 0.78}px, ${deltaY * 0.78 + arc}px) scale(1.04)`,
+      },
+      { opacity: 0, transform: `translate(${deltaX}px, ${deltaY}px) scale(0.62)` },
     ],
     {
       duration,
       delay,
-      easing: "cubic-bezier(0.16, 0.82, 0.18, 1)",
+      easing: "cubic-bezier(0.76, 0, 0.18, 1)",
       fill: "both",
     },
   );
@@ -1634,7 +1641,7 @@ async function formIntroMatrix(token) {
   const screen = $("#intro-screen");
   screen.classList.add("matrix-forming");
   $("#intro-matrix").setAttribute("aria-hidden", "false");
-  await introDelay(120, token);
+  await introDelay(60, token);
   if (token !== state.introToken) return false;
 
   const flights = [];
@@ -1642,9 +1649,9 @@ async function formIntroMatrix(token) {
     const target = $(`[data-intro-cell="${source.dataset.introRow}-${source.dataset.introCol}"]`);
     target.textContent = source.textContent;
     flights.push(flyIntroToken(source, target, {
-      delay: index * 34,
-      duration: 700 + (index % 3) * 55,
-      arc: 22 + (index % 3) * 6,
+      delay: index * 14,
+      duration: 405 + (index % 3) * 32,
+      arc: 28 + (index % 3) * 8,
     }));
     source.style.opacity = "0";
   });
@@ -1653,9 +1660,9 @@ async function formIntroMatrix(token) {
     const target = $(`[data-intro-target-var="${source.dataset.introVar}"]`);
     flights.push(flyIntroToken(source, target, {
       kind: "variable",
-      delay: 50 + index * 28,
-      duration: 710,
-      arc: -54 - (index % 3) * 8,
+      delay: 20 + index * 12,
+      duration: 430,
+      arc: -66 - (index % 3) * 10,
     }));
     source.style.opacity = "0";
   });
@@ -1663,15 +1670,16 @@ async function formIntroMatrix(token) {
   $$(".intro-rhs-source").forEach((source, row) => {
     const target = $(`[data-intro-cell="${row}-3"]`);
     flights.push(flyIntroToken(source, target, {
-      delay: 170 + row * 90,
-      duration: 720,
-      arc: 32,
+      delay: 70 + row * 34,
+      duration: 440,
+      arc: 38,
     }));
     source.style.opacity = "0";
   });
 
   await Promise.all(flights);
   if (token !== state.introToken) return false;
+  screen.classList.add("matrix-ready");
   $$(".intro-matrix-cell").forEach((cell) => cell.classList.add("landed"));
   $$(".intro-title-letter").forEach((letter) => letter.classList.add("landed"));
   playIntroTone({ frequency: 280, endFrequency: 420, duration: 0.18, gain: 0.025 });
@@ -1681,10 +1689,14 @@ async function formIntroMatrix(token) {
 async function animateIntroMatrixStep(step, token, stepIndex) {
   const operation = $("#intro-operation");
   operation.classList.remove("visible");
-  await introDelay(90, token);
+  await introDelay(35, token);
   if (token !== state.introToken) return false;
   operation.textContent = step.label;
   operation.classList.add("visible");
+  const screen = $("#intro-screen");
+  screen.classList.remove("matrix-impact");
+  void screen.offsetWidth;
+  screen.classList.add("matrix-impact");
 
   const changes = [];
   step.values.forEach((row, rowIndex) => {
@@ -1695,7 +1707,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
         cell.classList.add("value-visible");
         return;
       }
-      changes.push({ cell, nextValue, delay: (rowIndex * 4 + columnIndex) * 24 });
+      changes.push({ cell, nextValue, delay: (rowIndex * 4 + columnIndex) * 8 });
     });
   });
 
@@ -1706,7 +1718,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
           { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
           { opacity: 0, transform: "translateY(-16px) rotateX(68deg) scale(0.72)" },
         ],
-        { duration: 190, delay, easing: "ease-in", fill: "forwards" },
+        { duration: 85, delay, easing: "cubic-bezier(0.76, 0, 0.84, 0)", fill: "forwards" },
       ).finished.catch(() => {});
     }
     if (token !== state.introToken) return;
@@ -1719,9 +1731,9 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
           { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
         ],
         {
-          duration: 360,
-          delay: 20,
-          easing: "cubic-bezier(0.12, 1.16, 0.24, 1)",
+          duration: 185,
+          delay: 5,
+          easing: "cubic-bezier(0.08, 1.42, 0.18, 1)",
           fill: "forwards",
         },
       ).finished.catch(() => {});
@@ -1753,8 +1765,8 @@ async function launchIntroSolutions(token) {
     const target = $(`[data-intro-target-var="${solution.variable}"]`);
     await flyIntroToken(source, target, {
       kind: "solution",
-      duration: 620,
-      arc: -76,
+      duration: 370,
+      arc: -92,
     });
     if (token !== state.introToken) return false;
     target.dataset.solutionValue = solution.value;
@@ -1765,7 +1777,7 @@ async function launchIntroSolutions(token) {
       duration: 0.14,
       gain: 0.035,
     });
-    if (!(await introDelay(170, token))) return false;
+    if (!(await introDelay(60, token))) return false;
   }
   return true;
 }
@@ -1777,7 +1789,7 @@ async function finishIntro({ skipped = false, token = state.introToken } = {}) {
   localStorage.setItem(INTRO_SEEN_KEY, "true");
   $("#intro-screen").classList.add("intro-finishing");
   document.body.classList.remove("intro-active");
-  await wait(introReducedMotion() || skipped ? 40 : 780);
+  await wait(introReducedMotion() || skipped ? 40 : 520);
   if (token !== state.introToken) return;
   $("#intro-screen").hidden = true;
   resetIntroDom();
@@ -1797,31 +1809,32 @@ async function runIntroAnimation() {
   prepareIntroAudio();
   playIntroTone({ frequency: 145, endFrequency: 235, duration: 0.42, gain: 0.035 });
 
-  if (!(await introDelay(480, token))) return;
+  if (!(await introDelay(260, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
   playIntroTone({ frequency: 260, endFrequency: 390, duration: 0.22, gain: 0.028 });
 
-  if (!(await introDelay(1450, token))) return;
+  if (!(await introDelay(760, token))) return;
   if (!(await formIntroMatrix(token))) return;
-  if (!(await introDelay(380, token))) return;
+  if (!(await introDelay(150, token))) return;
 
   for (let index = 0; index < INTRO_MATRIX_STEPS.length; index += 1) {
     if (!(await animateIntroMatrixStep(INTRO_MATRIX_STEPS[index], token, index))) return;
-    if (!(await introDelay(index === 0 ? 460 : 320, token))) return;
+    if (!(await introDelay(index === 0 ? 140 : 90, token))) return;
   }
 
   $("#intro-operation").classList.remove("visible");
-  if (!(await introDelay(180, token))) return;
+  if (!(await introDelay(70, token))) return;
   $("#intro-operation").textContent = "SOLUTION LOCKED";
   $("#intro-operation").classList.add("visible");
   if (!(await launchIntroSolutions(token))) return;
-  if (!(await introDelay(410, token))) return;
+  if (!(await introDelay(170, token))) return;
 
+  screen.classList.remove("matrix-impact");
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
   playIntroFinalClick();
-  if (!(await introDelay(1050, token))) return;
+  if (!(await introDelay(650, token))) return;
   await finishIntro({ token });
 }
 

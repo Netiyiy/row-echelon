@@ -78,9 +78,21 @@ body.intro-active .game-shell {
     linear-gradient(160deg, #2b1b15 0%, var(--cocoa) 52%, #241711 100%);
   opacity: 1;
   transition:
-    opacity 780ms ease,
-    filter 780ms ease,
-    transform 900ms cubic-bezier(0.16, 0.84, 0.18, 1);
+    opacity 520ms cubic-bezier(0.7, 0, 0.84, 0),
+    filter 520ms ease,
+    transform 620ms cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+.intro-screen::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 49%, rgb(250 230 191 / 24%), transparent 27%),
+    linear-gradient(90deg, transparent, rgb(199 209 140 / 11%), transparent);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
 }
 
 .intro-screen.intro-finishing {
@@ -119,21 +131,6 @@ body.intro-active .game-shell {
   min-height: 540px;
 }
 
-.intro-kicker {
-  position: absolute;
-  top: 1.5%;
-  left: 0;
-  width: 100%;
-  margin: 0;
-  color: var(--muted-cream);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.24em;
-  text-align: center;
-  opacity: 0;
-  animation: intro-kicker-in 900ms ease 180ms forwards;
-}
-
 .intro-equations,
 .intro-matrix {
   position: absolute;
@@ -154,9 +151,9 @@ body.intro-active .game-shell {
   align-content: center;
   gap: 23px;
   transition:
-    opacity 700ms ease,
-    filter 700ms ease,
-    transform 850ms cubic-bezier(0.16, 0.84, 0.18, 1);
+    opacity 390ms cubic-bezier(0.7, 0, 0.84, 0),
+    filter 410ms ease,
+    transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .intro-equation-set p {
@@ -172,6 +169,18 @@ body.intro-active .game-shell {
 
 .intro-equation-set.original {
   opacity: 1;
+}
+
+.intro-screen.intro-running:not(.intro-expanded) .intro-equation-set.original p:nth-child(1) {
+  animation: intro-equation-windup-left 340ms cubic-bezier(0.76, 0, 0.18, 1) both;
+}
+
+.intro-screen.intro-running:not(.intro-expanded) .intro-equation-set.original p:nth-child(2) {
+  animation: intro-equation-windup-center 340ms cubic-bezier(0.76, 0, 0.18, 1) 24ms both;
+}
+
+.intro-screen.intro-running:not(.intro-expanded) .intro-equation-set.original p:nth-child(3) {
+  animation: intro-equation-windup-right 340ms cubic-bezier(0.76, 0, 0.18, 1) 48ms both;
 }
 
 .intro-equation-set.expanded {
@@ -200,15 +209,15 @@ body.intro-active .game-shell {
 }
 
 .intro-screen.intro-expanded .intro-equation-set .inserted {
-  animation: intro-insert-token 520ms cubic-bezier(0.16, 1.18, 0.28, 1) forwards;
+  animation: intro-insert-token 330ms cubic-bezier(0.08, 1.42, 0.18, 1) forwards;
 }
 
 .intro-screen.intro-expanded .intro-equation-set p:nth-child(2) .inserted {
-  animation-delay: 130ms;
+  animation-delay: 55ms;
 }
 
 .intro-screen.intro-expanded .intro-equation-set p:nth-child(3) .inserted {
-  animation-delay: 230ms;
+  animation-delay: 105ms;
 }
 
 .intro-coefficient,
@@ -231,9 +240,9 @@ body.intro-active .game-shell {
   pointer-events: none;
   transform: translate(-50%, -46%) scale(0.92);
   transition:
-    opacity 680ms ease,
-    filter 680ms ease,
-    transform 850ms cubic-bezier(0.16, 0.9, 0.18, 1);
+    opacity 340ms ease,
+    filter 390ms ease,
+    transform 520ms cubic-bezier(0.08, 1.08, 0.18, 1);
 }
 
 .intro-screen.matrix-forming .intro-equations {
@@ -241,9 +250,9 @@ body.intro-active .game-shell {
   filter: blur(12px);
   transform: translate(-50%, -55%) scale(1.06);
   transition:
-    opacity 620ms ease,
-    filter 620ms ease,
-    transform 780ms ease;
+    opacity 330ms cubic-bezier(0.7, 0, 0.84, 0),
+    filter 360ms ease,
+    transform 480ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 .intro-screen.matrix-forming .intro-matrix {
@@ -350,24 +359,49 @@ body.intro-active .game-shell {
   border-bottom: 2px solid var(--cream);
   opacity: 0;
   transform: scaleY(0.18);
-  transition:
-    opacity 520ms ease 180ms,
-    transform 760ms cubic-bezier(0.16, 0.94, 0.2, 1) 120ms;
 }
 
 .intro-bracket.left {
   border-left: 2px solid var(--cream);
   border-radius: 8px 0 0 8px;
+  transform: translateX(86px) scaleY(0.12) scaleX(0.55);
 }
 
 .intro-bracket.right {
   border-right: 2px solid var(--cream);
   border-radius: 0 8px 8px 0;
+  transform: translateX(-86px) scaleY(0.12) scaleX(0.55);
 }
 
-.intro-screen.matrix-forming .intro-bracket {
-  opacity: 0.82;
-  transform: scaleY(1);
+.intro-screen.matrix-forming .intro-bracket.left {
+  animation: intro-bracket-enter-left 560ms cubic-bezier(0.08, 1.18, 0.18, 1) 40ms forwards;
+}
+
+.intro-screen.matrix-forming .intro-bracket.right {
+  animation: intro-bracket-enter-right 560ms cubic-bezier(0.08, 1.18, 0.18, 1) 40ms forwards;
+}
+
+.intro-screen.matrix-ready .intro-bracket.left,
+.intro-screen.matrix-ready .intro-bracket.right {
+  opacity: 0.86;
+  transform: translateX(0) scaleY(1) scaleX(1);
+  animation: none;
+}
+
+.intro-screen.matrix-impact::after {
+  animation: intro-impact-flash 310ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.intro-screen.matrix-impact .intro-bracket.left {
+  animation: intro-bracket-impact-left 360ms cubic-bezier(0.16, 1.22, 0.24, 1);
+}
+
+.intro-screen.matrix-impact .intro-bracket.right {
+  animation: intro-bracket-impact-right 360ms cubic-bezier(0.16, 1.22, 0.24, 1);
+}
+
+.intro-screen.matrix-impact .intro-matrix-grid {
+  animation: intro-grid-impact 350ms cubic-bezier(0.12, 1.18, 0.24, 1);
 }
 
 .intro-matrix-grid {
@@ -433,6 +467,28 @@ body.intro-active .game-shell {
 .intro-operation.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.intro-screen.matrix-impact .intro-operation.visible {
+  color: var(--success);
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 16px rgb(199 209 140 / 40%);
+}
+
+.intro-screen.rref-complete .intro-bracket.left {
+  animation: intro-bracket-lock-left 600ms cubic-bezier(0.12, 1.35, 0.22, 1) forwards;
+}
+
+.intro-screen.rref-complete .intro-bracket.right {
+  animation: intro-bracket-lock-right 600ms cubic-bezier(0.12, 1.35, 0.22, 1) forwards;
+}
+
+.intro-screen.rref-complete .intro-matrix-grid {
+  animation: intro-grid-lock 650ms cubic-bezier(0.12, 1.28, 0.24, 1);
+}
+
+.intro-screen.rref-complete::after {
+  animation: intro-final-flash 720ms ease-out;
 }
 
 .intro-begin {
@@ -534,12 +590,94 @@ body.intro-active .game-shell {
   to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-@keyframes intro-kicker-in {
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @keyframes intro-insert-token {
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes intro-equation-windup-left {
+  0% { transform: translateX(0) scale(1); }
+  45% { transform: translateX(-13px) scale(0.97); }
+  100% { transform: translateX(5px) scale(1.025); }
+}
+
+@keyframes intro-equation-windup-center {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.94); filter: brightness(0.9); }
+  100% { transform: scale(1.04); filter: brightness(1.18); }
+}
+
+@keyframes intro-equation-windup-right {
+  0% { transform: translateX(0) scale(1); }
+  45% { transform: translateX(13px) scale(0.97); }
+  100% { transform: translateX(-5px) scale(1.025); }
+}
+
+@keyframes intro-bracket-enter-left {
+  0% { opacity: 0; transform: translateX(86px) scaleY(0.12) scaleX(0.55); }
+  54% { opacity: 1; transform: translateX(-13px) scaleY(1.09) scaleX(1.08); }
+  76% { transform: translateX(5px) scaleY(0.96) scaleX(0.97); }
+  100% { opacity: 0.86; transform: translateX(0) scaleY(1) scaleX(1); }
+}
+
+@keyframes intro-bracket-enter-right {
+  0% { opacity: 0; transform: translateX(-86px) scaleY(0.12) scaleX(0.55); }
+  54% { opacity: 1; transform: translateX(13px) scaleY(1.09) scaleX(1.08); }
+  76% { transform: translateX(-5px) scaleY(0.96) scaleX(0.97); }
+  100% { opacity: 0.86; transform: translateX(0) scaleY(1) scaleX(1); }
+}
+
+@keyframes intro-bracket-impact-left {
+  0% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+  22% { opacity: 1; transform: translateX(9px) scaleY(0.9); }
+  55% { transform: translateX(-12px) scaleY(1.1); }
+  100% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+}
+
+@keyframes intro-bracket-impact-right {
+  0% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+  22% { opacity: 1; transform: translateX(-9px) scaleY(0.9); }
+  55% { transform: translateX(12px) scaleY(1.1); }
+  100% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+}
+
+@keyframes intro-grid-impact {
+  0% { filter: brightness(1); transform: scale(1); }
+  26% { filter: brightness(1.4); transform: scale(0.965) skewX(-1.5deg); }
+  58% { filter: brightness(1.12); transform: scale(1.035) skewX(0.7deg); }
+  100% { filter: brightness(1); transform: scale(1); }
+}
+
+@keyframes intro-impact-flash {
+  0% { opacity: 0; transform: scaleX(0.2); }
+  22% { opacity: 0.62; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1.1); }
+}
+
+@keyframes intro-bracket-lock-left {
+  0% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+  34% { opacity: 1; transform: translateX(17px) scaleY(0.78); filter: brightness(1.8); }
+  68% { transform: translateX(-16px) scaleY(1.15); }
+  100% { opacity: 1; transform: translateX(-5px) scaleY(1.06); filter: brightness(1.2); }
+}
+
+@keyframes intro-bracket-lock-right {
+  0% { opacity: 0.86; transform: translateX(0) scaleY(1); }
+  34% { opacity: 1; transform: translateX(-17px) scaleY(0.78); filter: brightness(1.8); }
+  68% { transform: translateX(16px) scaleY(1.15); }
+  100% { opacity: 1; transform: translateX(5px) scaleY(1.06); filter: brightness(1.2); }
+}
+
+@keyframes intro-grid-lock {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.91); filter: brightness(1.55); }
+  58% { transform: scale(1.08); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes intro-final-flash {
+  0% { opacity: 0; }
+  18% { opacity: 0.9; }
+  100% { opacity: 0; }
 }
 
 @keyframes intro-title-pop {
