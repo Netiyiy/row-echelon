@@ -12,6 +12,12 @@ This is the production backend for the Row Echelon website and future iOS app.
   - `POST /api/accounts`
   - `GET /api/leaderboard`
   - `POST /api/complete`
+  - `POST /api/session`
+  - `POST /api/logout`
+
+Player sessions expire after 30 minutes without activity. Active browser
+sessions send a heartbeat every five minutes, and expired sessions release
+their usernames for reuse.
 
 The deployed API base URL is:
 

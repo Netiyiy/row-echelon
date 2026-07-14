@@ -99,6 +99,9 @@ const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clo
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
 const SOUND_KEY = "rowEchelonSoundEnabled";
+const SESSION_IDLE_MS = 30 * 60 * 1000;
+const SESSION_HEARTBEAT_MS = 5 * 60 * 1000;
+const SESSION_ACTIVITY_SAVE_MS = 10 * 1000;
 const INTRO_SEEN_KEY = "rowEchelonIntroSeenV2";
 const INTRO_MATRIX_STEPS = Object.freeze([
   {
@@ -333,6 +336,12 @@ const state = {
   introVisible: false,
   introRunning: false,
   introToken: 0,
+  sessionIdleTimer: null,
+  lastActivityAt: 0,
+  lastActivitySavedAt: 0,
+  lastHeartbeatAt: 0,
+  sessionHeartbeatPending: false,
+  sessionExpiring: false,
 };
 
 function loadPlayerSession() {
@@ -346,12 +355,26 @@ function loadPlayerSession() {
 }
 
 function savePlayerSession(session) {
+  const now = Date.now();
+  session.lastActiveAt = now;
   state.playerSession = session;
+  state.lastActivityAt = now;
+  state.lastActivitySavedAt = now;
+  state.lastHeartbeatAt = now;
+  state.sessionExpiring = false;
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  scheduleSessionIdleTimeout();
 }
 
 function clearPlayerSession() {
+  window.clearTimeout(state.sessionIdleTimer);
+  state.sessionIdleTimer = null;
   state.playerSession = null;
+  state.lastActivityAt = 0;
+  state.lastActivitySavedAt = 0;
+  state.lastHeartbeatAt = 0;
+  state.sessionHeartbeatPending = false;
+  state.sessionExpiring = false;
   localStorage.removeItem(SESSION_KEY);
 }
 
@@ -386,6 +409,90 @@ async function apiRequest(path, { method = "GET", body, auth = false } = {}) {
     throw requestError;
   }
   return data;
+}
+
+function persistSessionActivity(now = Date.now()) {
+  if (!state.playerSession) return;
+  state.playerSession.lastActiveAt = now;
+  state.lastActivitySavedAt = now;
+  localStorage.setItem(SESSION_KEY, JSON.stringify(state.playerSession));
+}
+
+function scheduleSessionIdleTimeout() {
+  window.clearTimeout(state.sessionIdleTimer);
+  state.sessionIdleTimer = null;
+  if (!signedIn() || !state.lastActivityAt) return;
+  const remaining = Math.max(0, SESSION_IDLE_MS - (Date.now() - state.lastActivityAt));
+  state.sessionIdleTimer = window.setTimeout(checkSessionInactivity, remaining + 50);
+}
+
+function expirePlayerSession() {
+  if (!signedIn() || state.sessionExpiring) return true;
+  state.sessionExpiring = true;
+  const token = state.playerSession.token;
+  fetch(`${API_BASE_URL}/api/logout`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    keepalive: true,
+  }).catch(() => {});
+  audio.suspend();
+  clearPlayerAndLock("Session timed out after 30 minutes of inactivity. Your username is available again.");
+  startLevel(1);
+  return true;
+}
+
+function checkSessionInactivity() {
+  if (!signedIn()) return false;
+  if (Date.now() - state.lastActivityAt >= SESSION_IDLE_MS) {
+    return expirePlayerSession();
+  }
+  scheduleSessionIdleTimeout();
+  return false;
+}
+
+async function keepSessionAlive() {
+  if (!signedIn() || state.sessionHeartbeatPending || document.hidden) return;
+  state.sessionHeartbeatPending = true;
+  try {
+    await apiRequest("/api/session", { method: "POST", auth: true });
+    state.lastHeartbeatAt = Date.now();
+  } catch (error) {
+    if (isAuthError(error)) {
+      audio.suspend();
+      clearPlayerAndLock("Session timed out after 30 minutes of inactivity. Your username is available again.");
+      startLevel(1);
+    }
+  } finally {
+    state.sessionHeartbeatPending = false;
+  }
+}
+
+function recordPlayerActivity() {
+  if (!signedIn() || state.sessionExpiring || document.hidden) return;
+  const now = Date.now();
+  state.lastActivityAt = now;
+  if (now - state.lastActivitySavedAt >= SESSION_ACTIVITY_SAVE_MS) {
+    persistSessionActivity(now);
+  }
+  scheduleSessionIdleTimeout();
+  if (now - state.lastHeartbeatAt >= SESSION_HEARTBEAT_MS) {
+    keepSessionAlive();
+  }
+}
+
+function initializeSessionActivity() {
+  if (!signedIn()) return;
+  const storedActivity = Number(state.playerSession.lastActiveAt);
+  const now = Date.now();
+  state.lastActivityAt = Number.isFinite(storedActivity) && storedActivity > 0
+    ? storedActivity
+    : now;
+  state.lastActivitySavedAt = state.lastActivityAt;
+  state.lastHeartbeatAt = now;
+  if (!checkSessionInactivity()) scheduleSessionIdleTimeout();
 }
 
 function intMatrix(values) {
@@ -1069,6 +1176,7 @@ async function refreshLeaderboard() {
 
 function clearPlayerAndLock(message) {
   clearLevelTimer();
+  audio.suspend();
   clearPlayerSession();
   state.settingsOpen = false;
   state.settingsMessage = "";
@@ -2051,8 +2159,10 @@ document.addEventListener("keydown", (event) => {
 });
 document.addEventListener("pointerdown", () => {
   audio.resumeFromUserGesture();
+  recordPlayerActivity();
   if (state.introVisible && state.introRunning) prepareIntroAudio();
 });
+document.addEventListener("keydown", recordPlayerActivity);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     audio.suspend();
@@ -2062,6 +2172,7 @@ document.addEventListener("visibilitychange", () => {
     pauseLevelTimer();
     return;
   }
+  if (checkSessionInactivity()) return;
   resumeLevelTimer();
 });
 window.addEventListener("pagehide", () => {
@@ -2071,7 +2182,10 @@ window.addEventListener("pagehide", () => {
   }
   pauseLevelTimer();
 });
-window.addEventListener("pageshow", () => resumeLevelTimer());
+window.addEventListener("pageshow", () => {
+  if (checkSessionInactivity()) return;
+  resumeLevelTimer();
+});
 document.addEventListener("freeze", () => {
   audio.suspend();
   if (introAudioContext?.state === "running") {
@@ -2087,6 +2201,7 @@ if ("serviceWorker" in navigator) {
 }
 
 startLevel(1);
+initializeSessionActivity();
 refreshLeaderboard();
 if (localStorage.getItem(INTRO_SEEN_KEY) !== "true") {
   showIntro();

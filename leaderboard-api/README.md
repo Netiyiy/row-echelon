@@ -26,6 +26,11 @@ localStorage.setItem("rowEchelonApiBaseUrl", "https://your-api-host.example.com"
 - `POST /api/accounts` with `{ "name": "Player" }`
 - `GET /api/leaderboard`
 - `POST /api/complete` with `{ "level": 1, "steps": 7, "timeSeconds": 32 }` and `Authorization: Bearer <token>`
+- `POST /api/session` with `Authorization: Bearer <token>` to keep an active session alive
+- `POST /api/logout` with `Authorization: Bearer <token>` to release a username
+
+Player sessions expire after 30 minutes without activity. Expired tokens are
+rejected and their usernames become available for a new session.
 
 Ranking is by total daily score, highest first. The server calculates each solve with:
 

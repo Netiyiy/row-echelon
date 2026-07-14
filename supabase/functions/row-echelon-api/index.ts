@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const LEADERBOARD_TIMEZONE = "America/Los_Angeles";
 const DEFAULT_LIMIT = 10;
+const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SCORING = Object.freeze({
   A: 165,
   P: 1.22,
@@ -54,6 +55,7 @@ type PlayerRow = {
   name: string;
   created_at: string;
   token_hash: string;
+  last_active_at: string;
 };
 
 type DailyScoreRow = {
@@ -177,6 +179,28 @@ function bearerToken(request: Request) {
   return match ? match[1] : null;
 }
 
+function playerLastActiveAt(player: PlayerRow) {
+  return Date.parse(player.last_active_at || player.created_at) || 0;
+}
+
+function playerSessionExpired(player: PlayerRow, now = Date.now()) {
+  return now - playerLastActiveAt(player) >= SESSION_IDLE_MS;
+}
+
+async function releasePlayerSession(player: PlayerRow) {
+  const releasedKey = `ended:${player.id}`;
+  const { error } = await supabase
+    .from("row_echelon_players")
+    .update({
+      name_key: releasedKey,
+      token_hash: releasedKey,
+    })
+    .eq("id", player.id)
+    .eq("token_hash", player.token_hash);
+
+  if (error) throw error;
+}
+
 async function requirePlayer(request: Request) {
   const token = bearerToken(request);
   if (!token) throw new HttpError(401, "Missing player token.");
@@ -184,13 +208,27 @@ async function requirePlayer(request: Request) {
   const tokenHash = await sha256Hex(token);
   const { data, error } = await supabase
     .from("row_echelon_players")
-    .select("id,name,created_at,token_hash")
+    .select("id,name,created_at,token_hash,last_active_at")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
   if (error) throw error;
   if (!data) throw new HttpError(401, "Invalid player token.");
-  return data as PlayerRow;
+  const player = data as PlayerRow;
+  if (playerSessionExpired(player)) {
+    await releasePlayerSession(player);
+    throw new HttpError(401, "Session timed out after 30 minutes of inactivity.");
+  }
+
+  const lastActiveAt = new Date().toISOString();
+  const { error: touchError } = await supabase
+    .from("row_echelon_players")
+    .update({ last_active_at: lastActiveAt })
+    .eq("id", player.id)
+    .eq("token_hash", player.token_hash);
+
+  if (touchError) throw touchError;
+  return { ...player, last_active_at: lastActiveAt };
 }
 
 function rankRows(
@@ -290,6 +328,18 @@ async function createAccount(request: Request) {
   const name = normalizeName(body.name);
   validateName(name);
 
+  const nameKey = name.toLowerCase();
+  const { data: existing, error: existingError } = await supabase
+    .from("row_echelon_players")
+    .select("id,name,created_at,token_hash,last_active_at")
+    .eq("name_key", nameKey)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing && playerSessionExpired(existing as PlayerRow)) {
+    await releasePlayerSession(existing as PlayerRow);
+  }
+
   const token = randomToken();
   const tokenHash = await sha256Hex(token);
 
@@ -297,8 +347,9 @@ async function createAccount(request: Request) {
     .from("row_echelon_players")
     .insert({
       name,
-      name_key: name.toLowerCase(),
+      name_key: nameKey,
       token_hash: tokenHash,
+      last_active_at: new Date().toISOString(),
     })
     .select("id,name,created_at")
     .single();
@@ -318,18 +369,16 @@ async function createAccount(request: Request) {
 
 async function endSession(request: Request) {
   const player = await requirePlayer(request);
-  const releasedKey = `ended:${player.id}`;
-  const { error } = await supabase
-    .from("row_echelon_players")
-    .update({
-      name_key: releasedKey,
-      token_hash: releasedKey,
-    })
-    .eq("id", player.id)
-    .eq("token_hash", player.token_hash);
-
-  if (error) throw error;
+  await releasePlayerSession(player);
   return json({ ok: true });
+}
+
+async function keepSessionAlive(request: Request) {
+  await requirePlayer(request);
+  return json({
+    ok: true,
+    idleTimeoutSeconds: SESSION_IDLE_MS / 1000,
+  });
 }
 
 async function getLeaderboard(request: Request, url: URL) {
@@ -451,6 +500,7 @@ Deno.serve(async (request) => {
         date: todayKey(),
         timezone: LEADERBOARD_TIMEZONE,
         scoring: SCORING,
+        sessionIdleTimeoutSeconds: SESSION_IDLE_MS / 1000,
       });
     }
     if (request.method === "POST" && path === "/api/accounts") {
@@ -464,6 +514,9 @@ Deno.serve(async (request) => {
     }
     if (request.method === "POST" && path === "/api/logout") {
       return await endSession(request);
+    }
+    if (request.method === "POST" && path === "/api/session") {
+      return await keepSessionAlive(request);
     }
 
     throw new HttpError(404, "Not found.");

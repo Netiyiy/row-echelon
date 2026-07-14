@@ -29,6 +29,10 @@ https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api
 
 See `SUPABASE_SETUP.md` for deployment notes.
 
+Player sessions time out after 30 minutes without keyboard or pointer activity.
+While a player is active, the web app sends a lightweight heartbeat every five
+minutes so long levels do not expire unexpectedly.
+
 On iPhone Safari, open the hosted URL, tap the Share button, then choose
 **Add to Home Screen**.
 

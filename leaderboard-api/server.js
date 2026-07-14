@@ -9,6 +9,7 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "db.json
 const LEADERBOARD_TIMEZONE = process.env.LEADERBOARD_TIMEZONE || "America/Los_Angeles";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const DEFAULT_LIMIT = 10;
+const SESSION_IDLE_MS = Number(process.env.SESSION_IDLE_MS || 30 * 60 * 1000);
 const SCORING = Object.freeze({
   A: 165,
   P: 1.22,
@@ -79,9 +80,14 @@ async function writeDb(db) {
 function updateDb(callback) {
   writeQueue = writeQueue.catch(() => undefined).then(async () => {
     const db = await readDb();
-    const result = await callback(db);
-    await writeDb(db);
-    return result;
+    try {
+      const result = await callback(db);
+      await writeDb(db);
+      return result;
+    } catch (error) {
+      if (error.persistDb) await writeDb(db);
+      throw error;
+    }
   });
   return writeQueue;
 }
@@ -123,12 +129,32 @@ function bearerToken(request) {
   return match ? match[1] : null;
 }
 
+function playerLastActiveAt(player) {
+  return Number(player.lastActiveAt) || Number(player.createdAt) || 0;
+}
+
+function playerSessionExpired(player, now = Date.now()) {
+  return now - playerLastActiveAt(player) >= SESSION_IDLE_MS;
+}
+
+function releasePlayerSession(player) {
+  player.tokenHash = `ended:${player.id}`;
+  player.sessionEndedAt = Date.now();
+}
+
 function requirePlayer(db, request) {
   const token = bearerToken(request);
   if (!token) throw new HttpError(401, "Missing player token.");
   const hash = tokenHash(token);
   const player = db.players.find((candidate) => candidate.tokenHash === hash);
   if (!player) throw new HttpError(401, "Invalid player token.");
+  if (playerSessionExpired(player)) {
+    releasePlayerSession(player);
+    const error = new HttpError(401, "Session timed out after 30 minutes of inactivity.");
+    error.persistDb = true;
+    throw error;
+  }
+  player.lastActiveAt = Date.now();
   return player;
 }
 
@@ -223,6 +249,9 @@ async function createAccount(request) {
   validateName(name);
 
   return updateDb(async (db) => {
+    db.players
+      .filter((player) => !player.sessionEndedAt && playerSessionExpired(player))
+      .forEach(releasePlayerSession);
     const taken = db.players.some((player) =>
       !player.sessionEndedAt && player.name.toLowerCase() === name.toLowerCase(),
     );
@@ -234,6 +263,7 @@ async function createAccount(request) {
       name,
       tokenHash: tokenHash(token),
       createdAt: Date.now(),
+      lastActiveAt: Date.now(),
     };
     db.players.push(player);
     return {
@@ -246,20 +276,27 @@ async function createAccount(request) {
 async function endSession(request) {
   return updateDb(async (db) => {
     const player = requirePlayer(db, request);
-    player.tokenHash = `ended:${player.id}`;
-    player.sessionEndedAt = Date.now();
+    releasePlayerSession(player);
     return { ok: true };
   });
 }
 
 async function getLeaderboard(request, url) {
-  const db = await readDb();
-  let currentPlayerId = null;
-  if (bearerToken(request)) {
-    currentPlayerId = requirePlayer(db, request).id;
-  }
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT));
-  return leaderboardPayload(db, { currentPlayerId, limit });
+  return updateDb(async (db) => {
+    let currentPlayerId = null;
+    if (bearerToken(request)) {
+      currentPlayerId = requirePlayer(db, request).id;
+    }
+    const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT));
+    return leaderboardPayload(db, { currentPlayerId, limit });
+  });
+}
+
+async function keepSessionAlive(request) {
+  return updateDb(async (db) => {
+    requirePlayer(db, request);
+    return { ok: true, idleTimeoutSeconds: SESSION_IDLE_MS / 1000 };
+  });
 }
 
 async function completeLevel(request) {
@@ -345,6 +382,7 @@ async function handleRequest(request, response) {
       date: todayKey(),
       timezone: LEADERBOARD_TIMEZONE,
       scoring: SCORING,
+      sessionIdleTimeoutSeconds: SESSION_IDLE_MS / 1000,
     });
     return;
   }
@@ -362,6 +400,10 @@ async function handleRequest(request, response) {
   }
   if (request.method === "POST" && url.pathname === "/api/logout") {
     send(response, 200, await endSession(request));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/session") {
+    send(response, 200, await keepSessionAlive(request));
     return;
   }
 
