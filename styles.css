@@ -686,15 +686,16 @@ h1 {
   z-index: 15;
   left: max(20px, 6vw);
   bottom: calc(env(safe-area-inset-bottom) + 16px);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid rgb(163 110 79 / 58%);
-  border-radius: 10px;
+  padding: 0;
+  border: 1px solid rgb(163 110 79 / 55%);
+  border-radius: 7px;
   color: var(--muted-cream);
-  background: rgb(92 61 48 / 78%);
-  box-shadow: 0 10px 22px rgb(0 0 0 / 18%);
+  background: rgb(92 61 48 / 76%);
 }
 
 .settings-button:hover,
@@ -710,8 +711,14 @@ h1 {
 }
 
 .settings-button span {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
   line-height: 1;
+  transform: translateY(-0.5px);
 }
 
 .settings-menu {
