@@ -25,6 +25,12 @@ localStorage.setItem("rowEchelonApiBaseUrl", "https://your-api-host.example.com"
 
 - `POST /api/accounts` with `{ "name": "Player" }`
 - `GET /api/leaderboard`
-- `POST /api/complete` with `{ "level": 1, "steps": 7 }` and `Authorization: Bearer <token>`
+- `POST /api/complete` with `{ "level": 1, "steps": 7, "timeSeconds": 32 }` and `Authorization: Bearer <token>`
 
-Ranking is by problems solved today, highest first. Total steps is only a tie-breaker.
+Ranking is by total daily score, highest first. The server calculates each solve with:
+
+```text
+Score = max(0, A * L^P - B * S - C * T)
+```
+
+The current constants are `A=165`, `P=1.22`, `B=7`, and `C=1.25`. Solved count, total steps, and total time are tie-breakers.

@@ -98,6 +98,12 @@ const fraction = (value) => new Fraction(value);
 const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clone()));
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
+const SCORING = Object.freeze({
+  A: 165,
+  P: 1.22,
+  B: 7,
+  C: 1.25,
+});
 
 function configuredApiBaseUrl() {
   const queryApi = new URLSearchParams(window.location.search).get("api");
@@ -113,6 +119,29 @@ function configuredApiBaseUrl() {
 }
 
 const API_BASE_URL = configuredApiBaseUrl();
+
+function formatTime(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainder = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${remainder}`;
+}
+
+function calculateScore({ level, steps, timeSeconds }) {
+  const levelReward = SCORING.A * (level ** SCORING.P);
+  const stepPenalty = SCORING.B * steps;
+  const timePenalty = SCORING.C * timeSeconds;
+  return {
+    level,
+    steps,
+    timeSeconds,
+    levelReward: Math.round(levelReward),
+    stepPenalty: Math.round(stepPenalty),
+    timePenalty: Math.round(timePenalty),
+    score: Math.max(0, Math.round(levelReward - stepPenalty - timePenalty)),
+    coefficients: SCORING,
+  };
+}
 
 class GameAudio {
   constructor() {
@@ -190,6 +219,12 @@ const state = {
   isSolved: false,
   steps: 0,
   bestSteps: Number(localStorage.getItem("rowEchelonBestSteps")) || null,
+  levelStartedAt: 0,
+  elapsedSeconds: 0,
+  timerId: null,
+  resultAnimationToken: 0,
+  resultScoreBreakdown: null,
+  lastLeaderboardResult: null,
   playerSession: loadPlayerSession(),
   leaderboard: [],
   playerEntry: null,
@@ -330,9 +365,50 @@ function reducedRowEchelonForm(source) {
   return values;
 }
 
+function currentElapsedSeconds() {
+  if (!state.levelStartedAt) return state.elapsedSeconds;
+  return Math.max(0, Math.floor((performance.now() - state.levelStartedAt) / 1000));
+}
+
+function updateTimerLabel(seconds = currentElapsedSeconds()) {
+  $("#timer-label").textContent = `TIME ${formatTime(seconds)}`;
+}
+
+function clearLevelTimer() {
+  if (state.timerId) {
+    window.clearInterval(state.timerId);
+    state.timerId = null;
+  }
+  state.levelStartedAt = 0;
+}
+
+function startLevelTimer() {
+  clearLevelTimer();
+  state.elapsedSeconds = 0;
+  state.levelStartedAt = performance.now();
+  updateTimerLabel(0);
+  state.timerId = window.setInterval(() => {
+    if (state.isSolved) return;
+    state.elapsedSeconds = currentElapsedSeconds();
+    updateTimerLabel(state.elapsedSeconds);
+  }, 250);
+}
+
+function stopLevelTimer() {
+  if (state.levelStartedAt) {
+    state.elapsedSeconds = Math.max(
+      1,
+      Math.ceil((performance.now() - state.levelStartedAt) / 1000),
+    );
+  }
+  clearLevelTimer();
+  updateTimerLabel(state.elapsedSeconds);
+  return state.elapsedSeconds;
+}
+
 function updateScoreLabels() {
   $("#current-score").textContent = `STEPS ${state.steps}`;
-  $("#best-score").textContent = `BEST ${state.bestSteps ?? "--"}`;
+  updateTimerLabel(state.isSolved ? state.elapsedSeconds : currentElapsedSeconds());
 }
 
 function renderAccount() {
@@ -356,8 +432,11 @@ function leaderboardRows() {
 }
 
 function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
-  const card = $("#leaderboard-card");
-  card.hidden = !state.leaderboardVisible;
+  const screen = $("#results-screen");
+  screen.hidden = !state.leaderboardVisible;
+  if (!state.leaderboardVisible) {
+    screen.classList.remove("visible", "exiting");
+  }
   $(".game-shell").classList.toggle("leaderboard-visible", state.leaderboardVisible);
 
   $("#leaderboard-date").textContent = state.leaderboardDate
@@ -407,11 +486,11 @@ function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
       solved.className = "leaderboard-solved";
       solved.textContent = `${entry.solved} solved`;
 
-      const steps = document.createElement("span");
-      steps.className = "leaderboard-steps";
-      steps.textContent = `${entry.totalSteps} steps`;
+      const score = document.createElement("span");
+      score.className = "leaderboard-score";
+      score.textContent = `${entry.totalScore ?? 0} pts`;
 
-      row.append(rank, name, solved, steps);
+      row.append(rank, name, score, solved);
       return row;
     }),
   );
@@ -426,6 +505,164 @@ function setLeaderboardData(data, renderOptions = {}) {
   }
 }
 
+function renderRankSummary(result = {}) {
+  const breakdown = result.scoreBreakdown || state.resultScoreBreakdown;
+  const totalScore = result.totalScore ?? state.playerEntry?.totalScore ?? breakdown?.score ?? 0;
+  const summary = $("#rank-summary");
+
+  if (result.offline) {
+    summary.textContent = "Score is local until the backend is online.";
+    return;
+  }
+  if (result.rankImproved && result.previousRank && result.rank) {
+    summary.textContent = `Rank up #${result.previousRank} -> #${result.rank}`;
+    return;
+  }
+  if (result.rank) {
+    summary.textContent = `Rank #${result.rank} • ${totalScore} total pts`;
+    return;
+  }
+  summary.textContent = "Leaderboard is updating.";
+}
+
+function prepareResultCard(result = {}) {
+  const breakdown = result.scoreBreakdown || state.resultScoreBreakdown;
+  state.resultScoreBreakdown = breakdown;
+  state.lastLeaderboardResult = result;
+
+  $$("#results-screen [data-result-item]").forEach((item) => {
+    item.classList.remove("revealed");
+  });
+  $$("#results-screen .leaderboard-row, #results-screen .leaderboard-empty, #results-screen .leaderboard-gap")
+    .forEach((item) => item.classList.remove("revealed"));
+
+  $("#result-score").textContent = "0";
+  $("#result-reward").textContent = "+0";
+  $("#result-step-penalty").textContent = "-0";
+  $("#result-time-penalty").textContent = "-0";
+  $("#result-level-stats").textContent =
+    `L${breakdown.level} • ${breakdown.steps} steps • ${formatTime(breakdown.timeSeconds)}`;
+
+  renderRankSummary(result);
+  renderLeaderboard({
+    rankImproved: result.rankImproved,
+    previousRank: result.previousRank,
+  });
+}
+
+function animateNumber(element, to, {
+  duration = 680,
+  prefix = "",
+  suffix = "",
+  token = state.resultAnimationToken,
+} = {}) {
+  return new Promise((resolve) => {
+    const startedAt = performance.now();
+    const target = Number(to) || 0;
+
+    const tick = (now) => {
+      if (token !== state.resultAnimationToken) {
+        resolve();
+        return;
+      }
+
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - ((1 - progress) ** 3);
+      element.textContent = `${prefix}${Math.round(target * eased)}${suffix}`;
+
+      if (progress < 1) {
+        window.requestAnimationFrame(tick);
+      } else {
+        element.textContent = `${prefix}${Math.round(target)}${suffix}`;
+        resolve();
+      }
+    };
+
+    window.requestAnimationFrame(tick);
+  });
+}
+
+async function animateResults(result, token) {
+  const breakdown = result.scoreBreakdown || state.resultScoreBreakdown;
+  const items = $$("#results-screen [data-result-item]");
+  const [reward, stepPenalty, timePenalty, stats] = items;
+
+  await wait(190);
+  if (token !== state.resultAnimationToken) return;
+  reward.classList.add("revealed");
+  await animateNumber($("#result-reward"), breakdown.levelReward, { prefix: "+", token });
+
+  await wait(110);
+  if (token !== state.resultAnimationToken) return;
+  stepPenalty.classList.add("revealed");
+  await animateNumber($("#result-step-penalty"), breakdown.stepPenalty, { prefix: "-", token });
+
+  await wait(110);
+  if (token !== state.resultAnimationToken) return;
+  timePenalty.classList.add("revealed");
+  await animateNumber($("#result-time-penalty"), breakdown.timePenalty, { prefix: "-", token });
+
+  await wait(110);
+  if (token !== state.resultAnimationToken) return;
+  stats.classList.add("revealed");
+
+  await wait(180);
+  if (token !== state.resultAnimationToken) return;
+  await animateNumber($("#result-score"), breakdown.score, { duration: 900, token });
+
+  const rows = $$("#results-screen .leaderboard-row, #results-screen .leaderboard-empty, #results-screen .leaderboard-gap");
+  for (const row of rows) {
+    if (token !== state.resultAnimationToken) return;
+    row.classList.add("revealed");
+    await wait(90);
+  }
+}
+
+async function showResults(result, celebrationToken) {
+  state.leaderboardVisible = true;
+  state.resultAnimationToken += 1;
+  const animationToken = state.resultAnimationToken;
+  prepareResultCard(result);
+
+  const screen = $("#results-screen");
+  screen.hidden = false;
+  screen.classList.remove("exiting");
+  window.requestAnimationFrame(() => {
+    screen.classList.add("visible");
+  });
+
+  if (result.rankImproved) {
+    audio.play("rank");
+    launchLeaderboardConfetti();
+  }
+
+  await animateResults(result, animationToken);
+  if (celebrationToken !== state.celebrationToken) return;
+}
+
+async function goToNextLevel() {
+  if (!state.leaderboardVisible) return;
+  const token = ++state.resultAnimationToken;
+  const screen = $("#results-screen");
+  screen.classList.add("exiting");
+  screen.classList.remove("visible");
+  $(".game-shell").classList.add("results-next");
+
+  await wait(460);
+  if (token !== state.resultAnimationToken) return;
+
+  state.leaderboardVisible = false;
+  state.lastLeaderboardResult = null;
+  state.resultScoreBreakdown = null;
+  $(".game-shell").classList.remove("leaderboard-visible", "results-next");
+  $(".game-shell").classList.add("play-entering");
+  screen.hidden = true;
+  startLevel(state.level + 1);
+  window.requestAnimationFrame(() => {
+    $(".game-shell").classList.remove("play-entering");
+  });
+}
+
 async function refreshLeaderboard() {
   if (!signedIn()) {
     renderLeaderboard();
@@ -433,7 +670,7 @@ async function refreshLeaderboard() {
   }
   try {
     const data = await apiRequest(`/api/leaderboard?limit=${LEADERBOARD_LIMIT}`, { auth: true });
-    state.leaderboardMessage = "Rank is based on problems solved today.";
+    state.leaderboardMessage = "Rank is based on total points today.";
     setLeaderboardData(data);
   } catch (error) {
     state.leaderboardMessage = `Leaderboard offline: ${error.message}`;
@@ -462,11 +699,11 @@ function launchLeaderboardConfetti() {
   window.setTimeout(() => layer.replaceChildren(), 1800);
 }
 
-async function submitCompletedLevel() {
+async function submitCompletedLevel(scoreBreakdown) {
   if (!signedIn()) {
     state.accountMessage = "Create a player before competing.";
     renderAccount();
-    return {};
+    return { scoreBreakdown, offline: true };
   }
 
   const previousRank = state.playerEntry?.rank || null;
@@ -477,6 +714,7 @@ async function submitCompletedLevel() {
       body: {
         level: state.level,
         steps: state.steps,
+        timeSeconds: scoreBreakdown.timeSeconds,
       },
     });
     const currentRank = data.playerEntry?.rank || data.rank;
@@ -484,14 +722,23 @@ async function submitCompletedLevel() {
     const rankImproved = Boolean(
       data.rankImproved || (knownPreviousRank && currentRank && currentRank < knownPreviousRank),
     );
+    const finalBreakdown = data.scoreBreakdown || scoreBreakdown;
+    const totalScore = data.playerEntry?.totalScore ?? finalBreakdown.score;
     state.leaderboardMessage = rankImproved
       ? `Rank up: #${knownPreviousRank} -> #${currentRank}`
-      : `You have solved ${data.playerEntry?.solved ?? 1} today.`;
+      : `+${finalBreakdown.score} pts • ${totalScore} total`;
     setLeaderboardData(data, { skipRender: true });
-    return { rankImproved, previousRank: knownPreviousRank };
+    return {
+      rankImproved,
+      previousRank: knownPreviousRank,
+      rank: currentRank,
+      scoreBreakdown: finalBreakdown,
+      previousScore: data.previousScore ?? null,
+      totalScore,
+    };
   } catch (error) {
     state.leaderboardMessage = `Score not saved: ${error.message}`;
-    return {};
+    return { scoreBreakdown, offline: true };
   }
 }
 
@@ -541,6 +788,7 @@ function render() {
 }
 
 function startLevel(level) {
+  clearLevelTimer();
   state.celebrationToken += 1;
   state.level = level;
   state.matrix = generateMatrix(level);
@@ -551,9 +799,16 @@ function startLevel(level) {
   state.selectedRow = null;
   state.isSolved = false;
   state.steps = 0;
+  state.elapsedSeconds = 0;
+  state.resultScoreBreakdown = null;
+  state.lastLeaderboardResult = null;
   state.leaderboardVisible = false;
+  $(".game-shell").classList.remove("leaderboard-visible", "results-next");
   $("#sparkle-layer").replaceChildren();
   render();
+  if (signedIn()) {
+    startLevelTimer();
+  }
 }
 
 function applyChange(change) {
@@ -612,23 +867,36 @@ function chooseRow(row) {
 function resetLevel() {
   if (state.isSolved) return;
   audio.play("reset");
+  clearLevelTimer();
   state.matrix = cloneMatrix(state.originalMatrix);
   state.history = [];
   state.selectedRow = null;
   state.isSolved = false;
   state.steps = 0;
+  state.elapsedSeconds = 0;
   state.leaderboardVisible = false;
   render();
+  if (signedIn()) {
+    startLevelTimer();
+  }
 }
 
 async function completeLevel() {
+  const completionTime = stopLevelTimer();
+  const scoreBreakdown = calculateScore({
+    level: state.level,
+    steps: state.steps,
+    timeSeconds: completionTime,
+  });
+  state.resultScoreBreakdown = scoreBreakdown;
+
   if (!state.bestSteps || state.steps < state.bestSteps) {
     state.bestSteps = state.steps;
     localStorage.setItem("rowEchelonBestSteps", String(state.bestSteps));
   }
   updateScoreLabels();
   audio.play("complete");
-  const leaderboardSave = submitCompletedLevel();
+  const leaderboardSave = submitCompletedLevel(scoreBreakdown);
 
   const token = ++state.celebrationToken;
   const reduced = reducedRowEchelonForm(state.matrix);
@@ -645,15 +913,13 @@ async function completeLevel() {
   const leaderboardResult = await leaderboardSave;
   if (token !== state.celebrationToken) return;
 
-  state.leaderboardVisible = true;
-  renderLeaderboard(leaderboardResult);
-  if (leaderboardResult?.rankImproved) {
-    audio.play("rank");
-    launchLeaderboardConfetti();
-  }
-
-  await wait(3600);
-  if (token === state.celebrationToken) startLevel(state.level + 1);
+  await showResults(
+    {
+      ...leaderboardResult,
+      scoreBreakdown: leaderboardResult?.scoreBreakdown || scoreBreakdown,
+    },
+    token,
+  );
 }
 
 async function animateSlotRow(rowIndex, solvedRow, token) {
@@ -764,7 +1030,7 @@ async function createAccount() {
     state.accountMessage = "";
     state.leaderboardMessage = "Account ready. Solve levels to climb.";
     input.value = "";
-    render();
+    startLevel(state.level);
     await refreshLeaderboard();
   } catch (error) {
     state.accountMessage = error.message;
@@ -792,6 +1058,7 @@ $("#player-name-input").addEventListener("keydown", (event) => {
 });
 
 $("#reset-button").addEventListener("click", resetLevel);
+$("#next-level-button").addEventListener("click", goToNextLevel);
 $("#factor-input").addEventListener("focus", (event) => {
   if (state.isSolved) {
     event.target.blur();

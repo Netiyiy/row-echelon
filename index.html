@@ -10,7 +10,7 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
@@ -39,60 +39,96 @@
         </div>
       </section>
 
-      <header class="hud">
-        <span id="current-score">STEPS 0</span>
-        <span id="best-score">BEST --</span>
-      </header>
+      <div id="play-view" class="play-view">
+        <header class="hud">
+          <span id="current-score">STEPS 0</span>
+          <span id="timer-label">TIME 00:00</span>
+        </header>
 
-      <section class="title-block">
-        <h1>Row Echelon</h1>
-        <p id="level-label">LEVEL 1</p>
-      </section>
+        <section class="title-block">
+          <h1>Row Echelon</h1>
+          <p id="level-label">LEVEL 1</p>
+        </section>
 
-      <section id="matrix-stage" class="matrix-stage" aria-label="Augmented matrix">
-        <div id="matrix" class="matrix"></div>
-        <div id="sparkle-layer" class="sparkle-layer" aria-hidden="true"></div>
-      </section>
+        <section id="matrix-stage" class="matrix-stage" aria-label="Augmented matrix">
+          <div id="matrix" class="matrix"></div>
+          <div id="sparkle-layer" class="sparkle-layer" aria-hidden="true"></div>
+        </section>
 
-      <section class="control-card" aria-label="Row operations">
-        <p class="eyebrow">ROW OPERATION</p>
-        <div class="operation-grid">
-          <button class="operation-button" type="button" data-mode="swap">Swap</button>
-          <button class="operation-button active" type="button" data-mode="add">Add</button>
-          <button class="operation-button" type="button" data-mode="scale">Scale</button>
+        <section class="control-card" aria-label="Row operations">
+          <p class="eyebrow">ROW OPERATION</p>
+          <div class="operation-grid">
+            <button class="operation-button" type="button" data-mode="swap">Swap</button>
+            <button class="operation-button active" type="button" data-mode="add">Add</button>
+            <button class="operation-button" type="button" data-mode="scale">Scale</button>
+          </div>
+          <div class="factor-line">
+            <label class="eyebrow" for="factor-input">FACTOR</label>
+            <input
+              id="factor-input"
+              class="factor-input"
+              name="factor"
+              value="-1"
+              inputmode="text"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="Factor"
+            />
+          </div>
+        </section>
+
+        <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
+        <button id="reset-button" class="reset-button" type="button">RESET</button>
+      </div>
+
+      <section id="results-screen" class="results-screen" aria-label="Level results" hidden>
+        <div class="results-card">
+          <div class="leaderboard-heading">
+            <p class="eyebrow">LEVEL COMPLETE</p>
+            <span id="player-label" class="player-label">NO PLAYER</span>
+          </div>
+
+          <div class="result-score-wrap">
+            <span id="result-score" class="result-score">0</span>
+            <span class="result-score-label">PTS</span>
+          </div>
+
+          <div class="result-stats" aria-label="Score breakdown">
+            <div class="result-stat" data-result-item>
+              <span>Level reward</span>
+              <strong id="result-reward">+0</strong>
+            </div>
+            <div class="result-stat" data-result-item>
+              <span>Step penalty</span>
+              <strong id="result-step-penalty">-0</strong>
+            </div>
+            <div class="result-stat" data-result-item>
+              <span>Time penalty</span>
+              <strong id="result-time-penalty">-0</strong>
+            </div>
+            <div class="result-stat" data-result-item>
+              <span>Level stats</span>
+              <strong id="result-level-stats">0 steps • 0:00</strong>
+            </div>
+          </div>
+
+          <p id="rank-summary" class="rank-summary" aria-live="polite"></p>
+
+          <div class="leaderboard-heading leaderboard-heading-spaced">
+            <p class="eyebrow">DAILY LEADERBOARD</p>
+            <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
+          </div>
+          <ol id="leaderboard-list" class="leaderboard-list"></ol>
+          <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
+          <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
         </div>
-        <div class="factor-line">
-          <label class="eyebrow" for="factor-input">FACTOR</label>
-          <input
-            id="factor-input"
-            class="factor-input"
-            name="factor"
-            value="-1"
-            inputmode="text"
-            autocomplete="off"
-            autocapitalize="off"
-            spellcheck="false"
-            aria-label="Factor"
-          />
-        </div>
+        <button id="next-level-button" class="next-level-button" type="button">NEXT</button>
       </section>
 
-      <section id="leaderboard-card" class="leaderboard-card" aria-label="Daily leaderboard" hidden>
-        <div class="leaderboard-heading">
-          <p class="eyebrow">DAILY LEADERBOARD</p>
-          <span id="player-label" class="player-label">NO PLAYER</span>
-        </div>
-        <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
-        <ol id="leaderboard-list" class="leaderboard-list"></ol>
-        <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
-        <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
-      </section>
-
-      <p id="level-cleared" class="level-cleared" aria-live="polite"></p>
-      <span class="version-label" aria-label="Version">v15</span>
-      <button id="reset-button" class="reset-button" type="button">RESET</button>
+      <span class="version-label" aria-label="Version">v16</span>
     </main>
 
-    <script src="app.js?v=11" defer></script>
+    <script src="app.js?v=12" defer></script>
   </body>
 </html>

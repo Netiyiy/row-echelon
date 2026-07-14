@@ -9,6 +9,12 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "db.json
 const LEADERBOARD_TIMEZONE = process.env.LEADERBOARD_TIMEZONE || "America/Los_Angeles";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const DEFAULT_LIMIT = 10;
+const SCORING = Object.freeze({
+  A: 165,
+  P: 1.22,
+  B: 7,
+  C: 1.25,
+});
 
 let writeQueue = Promise.resolve();
 
@@ -101,6 +107,22 @@ function requirePlayer(db, request) {
   return player;
 }
 
+function calculateScore({ level, steps, timeSeconds }) {
+  const levelReward = SCORING.A * (level ** SCORING.P);
+  const stepPenalty = SCORING.B * steps;
+  const timePenalty = SCORING.C * timeSeconds;
+  return {
+    level,
+    steps,
+    timeSeconds,
+    levelReward: Math.round(levelReward),
+    stepPenalty: Math.round(stepPenalty),
+    timePenalty: Math.round(timePenalty),
+    score: Math.max(0, Math.round(levelReward - stepPenalty - timePenalty)),
+    coefficients: SCORING,
+  };
+}
+
 function rankedEntries(db, date, currentPlayerId = null) {
   const byPlayer = new Map(db.players.map((player) => [player.id, player]));
   return db.dailyScores
@@ -108,15 +130,20 @@ function rankedEntries(db, date, currentPlayerId = null) {
     .map((score) => ({
       playerId: score.playerId,
       name: byPlayer.get(score.playerId).name,
-      solved: score.solved,
-      totalSteps: score.totalSteps,
+      solved: Number(score.solved) || 0,
+      totalScore: Number(score.totalScore) || 0,
+      totalSteps: Number(score.totalSteps) || 0,
+      totalTime: Number(score.totalTime) || 0,
       bestSteps: score.bestSteps,
-      updatedAt: score.updatedAt,
+      bestLevel: Number(score.bestLevel) || Number(score.lastLevel) || 0,
+      updatedAt: Number(score.updatedAt) || 0,
       isCurrentPlayer: score.playerId === currentPlayerId,
     }))
     .sort((left, right) =>
-      right.solved - left.solved
+      right.totalScore - left.totalScore
+      || right.solved - left.solved
       || left.totalSteps - right.totalSteps
+      || left.totalTime - right.totalTime
       || left.updatedAt - right.updatedAt,
     )
     .map((entry, index) => ({
@@ -203,14 +230,24 @@ async function completeLevel(request) {
   const body = await readJson(request);
   const level = Number(body.level);
   const steps = Number(body.steps);
+  const timeSeconds = Number(body.timeSeconds);
   if (!Number.isInteger(level) || level < 1) throw new HttpError(400, "Invalid level.");
   if (!Number.isInteger(steps) || steps < 1) throw new HttpError(400, "Invalid steps.");
+  if (!Number.isFinite(timeSeconds) || timeSeconds < 1) {
+    throw new HttpError(400, "Invalid completion time.");
+  }
 
   return updateDb(async (db) => {
     const player = requirePlayer(db, request);
     const date = todayKey();
     const previous = leaderboardPayload(db, { date, currentPlayerId: player.id });
     const previousRank = previous.playerEntry?.rank || null;
+    const previousScore = previous.playerEntry?.totalScore || 0;
+    const scoreBreakdown = calculateScore({
+      level,
+      steps,
+      timeSeconds: Math.ceil(timeSeconds),
+    });
 
     let score = db.dailyScores.find((entry) => entry.date === date && entry.playerId === player.id);
     if (!score) {
@@ -218,17 +255,25 @@ async function completeLevel(request) {
         date,
         playerId: player.id,
         solved: 0,
+        totalScore: 0,
         totalSteps: 0,
+        totalTime: 0,
         bestSteps: null,
+        bestLevel: 0,
         lastLevel: 0,
         updatedAt: Date.now(),
       };
       db.dailyScores.push(score);
     }
 
-    score.solved += 1;
-    score.totalSteps += steps;
-    score.bestSteps = score.bestSteps === null ? steps : Math.min(score.bestSteps, steps);
+    score.solved = (Number(score.solved) || 0) + 1;
+    score.totalScore = (Number(score.totalScore) || 0) + scoreBreakdown.score;
+    score.totalSteps = (Number(score.totalSteps) || 0) + steps;
+    score.totalTime = (Number(score.totalTime) || 0) + scoreBreakdown.timeSeconds;
+    score.bestSteps = score.bestSteps == null
+      ? steps
+      : Math.min(Number(score.bestSteps) || steps, steps);
+    score.bestLevel = Math.max(Number(score.bestLevel) || 0, level);
     score.lastLevel = level;
     score.updatedAt = Date.now();
 
@@ -237,6 +282,8 @@ async function completeLevel(request) {
     return {
       ...payload,
       previousRank,
+      previousScore,
+      scoreBreakdown,
       rank,
       rankImproved: Boolean(previousRank && rank && rank < previousRank),
     };
@@ -257,7 +304,12 @@ async function handleRequest(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (request.method === "GET" && url.pathname === "/health") {
-    send(response, 200, { ok: true, date: todayKey(), timezone: LEADERBOARD_TIMEZONE });
+    send(response, 200, {
+      ok: true,
+      date: todayKey(),
+      timezone: LEADERBOARD_TIMEZONE,
+      scoring: SCORING,
+    });
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/accounts") {
