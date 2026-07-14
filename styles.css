@@ -124,28 +124,6 @@ body.intro-active .game-shell {
   transform: translate(-50%, -50%);
 }
 
-.intro-confetti {
-  position: absolute;
-  z-index: 8;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.intro-confetti-piece {
-  position: absolute;
-  top: 48%;
-  left: 50%;
-  width: var(--intro-confetti-width);
-  height: var(--intro-confetti-height);
-  border-radius: 2px;
-  background: var(--intro-confetti-color);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--intro-confetti-color) 48%, transparent);
-  opacity: 0;
-  animation: intro-confetti-burst 1.85s cubic-bezier(0.12, 0.72, 0.2, 1)
-    var(--intro-confetti-delay) forwards;
-}
-
 .intro-stage {
   position: relative;
   width: min(100%, 620px);
@@ -1301,16 +1279,18 @@ h1 {
   pointer-events: none;
 }
 
-.sparkle {
+.gameplay-confetti-piece {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: var(--sparkle-size);
-  height: var(--sparkle-size);
+  width: var(--game-confetti-width);
+  height: var(--game-confetti-height);
+  border-radius: 2px;
   opacity: 0;
-  background: var(--sparkle-color);
-  clip-path: polygon(50% 0%, 59% 41%, 100% 50%, 59% 59%, 50% 100%, 41% 59%, 0% 50%, 41% 41%);
-  animation: sparkle-burst 1.24s ease-out var(--sparkle-delay) forwards;
+  background: var(--game-confetti-color);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--game-confetti-color) 44%, transparent);
+  animation: gameplay-confetti-burst 1.7s cubic-bezier(0.12, 0.72, 0.2, 1)
+    var(--game-confetti-delay) forwards;
 }
 
 .row-transfer-tracer {
@@ -2059,23 +2039,26 @@ h1 {
   100% { transform: translateX(-50%) scale(1); }
 }
 
-@keyframes sparkle-burst {
+@keyframes gameplay-confetti-burst {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.25) rotate(0);
+    transform: translate(-50%, -50%) scale(0.2) rotate(0);
   }
-  16% {
+  12% {
+    opacity: 1;
+  }
+  70% {
     opacity: 1;
   }
   100% {
     opacity: 0;
     transform:
       translate(
-        calc(-50% + var(--sparkle-x)),
-        calc(-50% + var(--sparkle-y))
+        calc(-50% + var(--game-confetti-x)),
+        calc(-50% + var(--game-confetti-y))
       )
-      scale(1)
-      rotate(var(--sparkle-rotation));
+      scale(0.95)
+      rotate(var(--game-confetti-rotate));
   }
 }
 
@@ -2116,29 +2099,6 @@ h1 {
       )
       scale(1)
       rotate(var(--confetti-rotate));
-  }
-}
-
-@keyframes intro-confetti-burst {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.22) rotate(0);
-  }
-  10% {
-    opacity: 1;
-  }
-  68% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform:
-      translate(
-        calc(-50% + var(--intro-confetti-x)),
-        calc(-50% + var(--intro-confetti-y))
-      )
-      scale(0.92)
-      rotate(var(--intro-confetti-rotate));
   }
 }
 

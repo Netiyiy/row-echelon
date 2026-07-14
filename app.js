@@ -1654,12 +1654,12 @@ async function completeLevel() {
   const leaderboardSave = submitCompletedLevel(scoreBreakdown);
 
   const token = ++state.celebrationToken;
+  launchGameplayConfetti(token);
   const reduced = reducedRowEchelonForm(state.matrix);
   await wait(360);
   await animateSolutionReveal(reduced, token);
 
   if (token !== state.celebrationToken) return;
-  addCompletionSparkles();
   const leaderboardResult = await leaderboardSave;
   if (token !== state.celebrationToken) return;
 
@@ -1951,28 +1951,32 @@ async function animateSolutionReveal(matrix, token) {
   await wait(1450);
 }
 
-function addCompletionSparkles() {
-  const sparkleLayer = $("#sparkle-layer");
-  sparkleLayer.replaceChildren();
+function launchGameplayConfetti(token) {
+  const layer = $("#sparkle-layer");
+  layer.replaceChildren();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  for (let index = 0; index < 26; index += 1) {
-    const sparkle = document.createElement("span");
-    sparkle.className = "sparkle";
+  for (let index = 0; index < 52; index += 1) {
+    const piece = document.createElement("span");
+    piece.className = "gameplay-confetti-piece";
     const angle = Math.random() * Math.PI * 2;
-    const distance = randomInt(82, 190);
-    sparkle.style.setProperty("--sparkle-size", `${randomInt(7, 15)}px`);
-    sparkle.style.setProperty("--sparkle-x", `${Math.cos(angle) * distance}px`);
-    sparkle.style.setProperty("--sparkle-y", `${Math.sin(angle) * distance}px`);
-    sparkle.style.setProperty("--sparkle-rotation", `${randomInt(-70, 70)}deg`);
-    sparkle.style.setProperty("--sparkle-delay", `${Math.random() * 320}ms`);
-    sparkle.style.setProperty(
-      "--sparkle-color",
+    const distance = randomInt(105, 245);
+    piece.style.setProperty("--game-confetti-x", `${Math.cos(angle) * distance}px`);
+    piece.style.setProperty("--game-confetti-y", `${Math.sin(angle) * distance + randomInt(18, 70)}px`);
+    piece.style.setProperty("--game-confetti-rotate", `${randomInt(-500, 500)}deg`);
+    piece.style.setProperty("--game-confetti-delay", `${Math.random() * 220}ms`);
+    piece.style.setProperty("--game-confetti-width", `${randomInt(5, 9)}px`);
+    piece.style.setProperty("--game-confetti-height", `${randomInt(8, 15)}px`);
+    piece.style.setProperty(
+      "--game-confetti-color",
       index % 3 === 0 ? "var(--cream)" : index % 2 === 0 ? "var(--success)" : "var(--accent)",
     );
-    sparkleLayer.append(sparkle);
+    layer.append(piece);
   }
 
-  window.setTimeout(() => sparkleLayer.replaceChildren(), 1800);
+  window.setTimeout(() => {
+    if (token === state.celebrationToken) layer.replaceChildren();
+  }, 2200);
 }
 
 function updateFactorFromInput({ restoreInvalid = false } = {}) {
@@ -2086,42 +2090,6 @@ function resetIntroDom() {
     letter.removeAttribute("data-solution-value");
   });
   $$(".intro-flyer").forEach((flyer) => flyer.remove());
-  $("#intro-confetti")?.replaceChildren();
-}
-
-function launchIntroConfetti(token) {
-  const layer = $("#intro-confetti");
-  if (!layer) return;
-  layer.replaceChildren();
-  if (introReducedMotion()) return;
-
-  for (let index = 0; index < 58; index += 1) {
-    const piece = document.createElement("span");
-    piece.className = "intro-confetti-piece";
-    const angle = (-Math.PI * 0.92) + Math.random() * (Math.PI * 0.84);
-    const distance = randomInt(150, 410);
-    piece.style.setProperty("--intro-confetti-x", `${Math.cos(angle) * distance}px`);
-    piece.style.setProperty("--intro-confetti-y", `${Math.sin(angle) * distance + randomInt(150, 300)}px`);
-    piece.style.setProperty("--intro-confetti-rotate", `${randomInt(-540, 540)}deg`);
-    piece.style.setProperty("--intro-confetti-delay", `${Math.random() * 260}ms`);
-    piece.style.setProperty("--intro-confetti-width", `${randomInt(5, 10)}px`);
-    piece.style.setProperty("--intro-confetti-height", `${randomInt(8, 16)}px`);
-    piece.style.setProperty(
-      "--intro-confetti-color",
-      index % 4 === 0
-        ? "var(--success)"
-        : index % 3 === 0
-          ? "var(--accent)"
-          : index % 2 === 0
-            ? "var(--cream)"
-            : "var(--muted-cream)",
-    );
-    layer.append(piece);
-  }
-
-  window.setTimeout(() => {
-    if (token === state.introToken) layer.replaceChildren();
-  }, 2400);
 }
 
 function introDelay(duration, token) {
@@ -2420,9 +2388,7 @@ async function runIntroAnimation() {
     "buttonUp",
     token,
   );
-  if (!(await introDelay(760, token))) return;
-  launchIntroConfetti(token);
-  if (!(await introDelay(2240, token))) return;
+  if (!(await introDelay(2100, token))) return;
   await finishIntro({ token });
 }
 
