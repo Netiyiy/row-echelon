@@ -280,14 +280,14 @@ class GameAudio {
     return this.introLoadPromise;
   }
 
-  playIntro(cue, volume = 0.58) {
+  playIntro(cue) {
     if (!this.enabled || this.suspended || document.hidden) return;
     const buffer = this.introBuffers.get(cue);
     if (buffer && this.introContext) {
       const source = this.introContext.createBufferSource();
       const gain = this.introContext.createGain();
       source.buffer = buffer;
-      gain.gain.value = volume;
+      gain.gain.value = this.backgroundVolume;
       source.connect(gain).connect(this.introContext.destination);
       this.introSources.add(source);
       source.onended = () => this.introSources.delete(source);
@@ -297,7 +297,7 @@ class GameAudio {
     const template = this.introTemplates[cue];
     if (!template) return;
     const player = template.cloneNode(true);
-    player.volume = volume;
+    player.volume = this.backgroundVolume;
     this.effects.add(player);
     const cleanup = () => this.effects.delete(player);
     player.addEventListener("ended", cleanup, { once: true });
@@ -1854,10 +1854,10 @@ function introDelay(duration, token) {
   return wait(adjustedDuration).then(() => token === state.introToken);
 }
 
-function cueIntroAnimationAt(element, animationName, progress, cue, volume, token = state.introToken) {
+function cueIntroAnimationAt(element, animationName, progress, cue, token = state.introToken) {
   if (!element) return;
   if (introReducedMotion()) {
-    audio.playIntro(cue, volume);
+    audio.playIntro(cue);
     return;
   }
   let missingFrames = 0;
@@ -1872,7 +1872,7 @@ function cueIntroAnimationAt(element, animationName, progress, cue, volume, toke
     const timing = animation.effect.getTiming();
     const targetTime = Number(timing.delay || 0) + Number(timing.duration) * progress;
     if (Number(animation.currentTime) >= targetTime) {
-      audio.playIntro(cue, volume);
+      audio.playIntro(cue);
       return;
     }
     window.requestAnimationFrame(checkAnimation);
@@ -1937,7 +1937,6 @@ async function formIntroMatrix(token) {
     "intro-bracket-enter-left",
     0.54,
     "buttonDown",
-    0.64,
     token,
   );
   $("#intro-matrix").setAttribute("aria-hidden", "false");
@@ -1983,7 +1982,7 @@ async function formIntroMatrix(token) {
   screen.classList.add("matrix-ready");
   $$(".intro-matrix-cell").forEach((cell) => cell.classList.add("landed"));
   $$(".intro-title-letter").forEach((letter) => letter.classList.add("landed"));
-  audio.playIntro("buttonUp", 0.54);
+  audio.playIntro("buttonUp");
   return true;
 }
 
@@ -2028,7 +2027,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
     cell.classList.add("value-visible", "changing");
     if (!changeCuePlayed) {
       changeCuePlayed = true;
-      audio.playIntro(stepIndex % 2 ? "tick" : "press", 0.5);
+      audio.playIntro(stepIndex % 2 ? "tick" : "press");
     }
     if (!introReducedMotion()) {
       await cell.animate(
@@ -2070,7 +2069,7 @@ async function launchIntroSolutions(token) {
     if (token !== state.introToken) return false;
     target.dataset.solutionValue = solution.value;
     target.classList.add("solution-landed");
-    audio.playIntro(index === 0 ? "soft" : index === 1 ? "tick" : "press", 0.5 + index * 0.05);
+    audio.playIntro(index === 0 ? "soft" : index === 1 ? "tick" : "press");
     if (!(await introDelay(150, token))) return false;
   }
   return true;
@@ -2097,19 +2096,20 @@ async function runIntroAnimation() {
   const token = state.introToken;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
-  audio.playIntro("buttonDown", 0.58);
+  audio.playIntro("buttonDown");
 
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
-  const expansionCues = [
-    ["soft", 0.46],
-    ["tick", 0.48],
-    ["press", 0.5],
-  ];
+  const expansionCues = ["soft", "tick", "press"];
   $$("#intro-equations-expanded p").forEach((row, index) => {
-    const [cue, volume] = expansionCues[index];
-    cueIntroAnimationAt(row.querySelector(".inserted"), "intro-insert-token", 0.5, cue, volume, token);
+    cueIntroAnimationAt(
+      row.querySelector(".inserted"),
+      "intro-insert-token",
+      0.5,
+      expansionCues[index],
+      token,
+    );
   });
 
   if (!(await introDelay(2100, token))) return;
@@ -2136,7 +2136,6 @@ async function runIntroAnimation() {
     "intro-bracket-lock-left",
     0.34,
     "clack",
-    0.7,
     token,
   );
   cueIntroAnimationAt(
@@ -2144,7 +2143,6 @@ async function runIntroAnimation() {
     "intro-r-pop",
     0.58,
     "buttonUp",
-    0.5,
     token,
   );
   if (!(await introDelay(2100, token))) return;
