@@ -664,31 +664,6 @@ function isGameSolved(matrix) {
   );
 }
 
-function reducedRowEchelonForm(source) {
-  const values = cloneMatrix(source);
-  const columnCount = values[0].length;
-  let pivotRow = 0;
-
-  for (let column = 0; column < columnCount && pivotRow < values.length; column += 1) {
-    const sourceRow = values.findIndex((row, index) => index >= pivotRow && !row[column].isZero);
-    if (sourceRow === -1) continue;
-    [values[pivotRow], values[sourceRow]] = [values[sourceRow], values[pivotRow]];
-
-    const pivot = values[pivotRow][column];
-    values[pivotRow] = values[pivotRow].map((value) => value.divide(pivot));
-    for (let row = 0; row < values.length; row += 1) {
-      if (row === pivotRow) continue;
-      const amount = values[row][column];
-      if (amount.isZero) continue;
-      values[row] = values[row].map((value, targetColumn) =>
-        value.add(fraction(-1).multiply(amount).multiply(values[pivotRow][targetColumn])),
-      );
-    }
-    pivotRow += 1;
-  }
-  return values;
-}
-
 function currentElapsedSeconds() {
   if (!state.levelStartedAt) return state.elapsedSeconds;
   return Math.max(0, state.elapsedSeconds + ((performance.now() - state.levelStartedAt) / 1000));
@@ -1652,14 +1627,11 @@ async function completeLevel() {
   const leaderboardSave = submitCompletedLevel(scoreBreakdown);
 
   const token = ++state.celebrationToken;
-  const solvedMatrix = cloneMatrix(state.matrix);
-  const replayFrames = state.history.map((matrix) => cloneMatrix(matrix));
-  await animateCasinoHistoryReplay(replayFrames, solvedMatrix, token);
+  await wait(620);
   if (token !== state.celebrationToken) return;
   launchGameplayConfetti(token);
-  const reduced = reducedRowEchelonForm(solvedMatrix);
   await wait(420);
-  await animateSolutionReveal(reduced, token);
+  await animateSolutionReveal(token);
 
   if (token !== state.celebrationToken) return;
   const leaderboardResult = await leaderboardSave;
@@ -1674,372 +1646,136 @@ async function completeLevel() {
   );
 }
 
-function displayMatrixFrame(matrix) {
-  const rows = $$("#matrix .matrix-row");
-  rows.forEach((row, rowIndex) => {
-    [...row.querySelectorAll(".matrix-value")].forEach((cell, columnIndex) => {
-      const value = matrix[rowIndex]?.[columnIndex];
-      if (value) cell.textContent = value.toString();
-    });
-  });
-}
-
-async function animateCasinoHistoryReplay(history, solvedMatrix, token) {
-  const frames = [...history, solvedMatrix];
-  if (!introReducedMotion() && frames.length > 1) {
-    await wait(620);
-    if (token !== state.celebrationToken) return;
-  }
-  displayMatrixFrame(frames[0] || solvedMatrix);
-  if (introReducedMotion() || frames.length <= 1) {
-    displayMatrixFrame(solvedMatrix);
-    await wait(80);
-    return;
-  }
-
-  const stage = $("#matrix-stage");
-  const label = document.createElement("div");
-  label.className = "casino-replay-label";
-  label.textContent = "START";
-  stage.append(label);
-  stage.classList.add("casino-replaying");
-  await wait(340);
-
-  const totalSteps = frames.length - 1;
-  for (let frameIndex = 1; frameIndex < frames.length; frameIndex += 1) {
-    if (token !== state.celebrationToken) break;
-    const isFinalFrame = frameIndex === totalSteps;
-    const cells = $$("#matrix .matrix-value");
-    const outDuration = isFinalFrame ? 125 : frameIndex === 1 ? 105 : 78;
-    const inDuration = isFinalFrame ? 230 : frameIndex === 1 ? 185 : 135;
-    const outgoing = cells.map((cell, cellIndex) => cell.animate(
-      [
-        { opacity: 1, filter: "blur(0)", transform: "perspective(420px) rotateX(0) translateY(0)" },
-        { opacity: 0, filter: "blur(2px)", transform: "perspective(420px) rotateX(-76deg) translateY(17px)" },
-      ],
-      {
-        duration: outDuration,
-        delay: (cellIndex % 4) * 7,
-        fill: "forwards",
-        easing: "cubic-bezier(0.7, 0, 0.84, 0)",
-      },
-    ));
-    await Promise.all(outgoing.map((animation) => animation.finished.catch(() => {})));
-    if (token !== state.celebrationToken) {
-      outgoing.forEach((animation) => animation.cancel());
-      break;
-    }
-
-    displayMatrixFrame(frames[frameIndex]);
-    label.textContent = `STEP ${frameIndex} / ${totalSteps}`;
-    outgoing.forEach((animation) => animation.cancel());
-    audio.play(isFinalFrame ? "apply" : "tap");
-
-    const incoming = cells.map((cell, cellIndex) => cell.animate(
-      [
-        { opacity: 0, filter: "blur(2px)", transform: "perspective(420px) rotateX(78deg) translateY(-18px) scale(0.94)" },
-        { opacity: 1, offset: 0.72, filter: "blur(0)", transform: "perspective(420px) rotateX(-8deg) translateY(2px) scale(1.035)" },
-        { opacity: 1, filter: "blur(0)", transform: "perspective(420px) rotateX(0) translateY(0) scale(1)" },
-      ],
-      {
-        duration: inDuration,
-        delay: (cellIndex % 4) * 8,
-        fill: "both",
-        easing: "cubic-bezier(0.12, 1.12, 0.24, 1)",
-      },
-    ));
-    await Promise.all(incoming.map((animation) => animation.finished.catch(() => {})));
-    incoming.forEach((animation) => animation.cancel());
-    if (!isFinalFrame) await wait(42);
-  }
-
-  displayMatrixFrame(solvedMatrix);
-  label.textContent = `STEP ${totalSteps} / ${totalSteps}`;
-  stage.classList.remove("casino-replaying");
-  if (token === state.celebrationToken) {
-    restartAnimationClass(stage, "casino-replay-landed", 680);
-    await wait(620);
-  }
-  label.remove();
-}
-
 function resetSolutionReveal() {
-  $("#matrix-stage")?.classList.remove("solution-revealing");
-  $("#matrix")?.classList.remove("solution-source-hidden");
-  $$(".solution-reveal, .solution-flyer").forEach((element) => element.remove());
-}
-
-function buildSolutionReveal(matrix) {
-  const reveal = document.createElement("div");
-  reveal.className = "solution-reveal";
-  reveal.setAttribute("aria-label", "Solved system");
-
-  const content = document.createElement("div");
-  content.className = "solution-reveal-content";
-
-  const variableBank = document.createElement("div");
-  variableBank.className = "solution-variable-bank";
-  const variableSources = [];
-  for (let index = 0; index < 3; index += 1) {
-    const variable = document.createElement("span");
-    variable.className = "solution-variable-source";
-    variable.textContent = `x${index + 1}`;
-    variable.setAttribute("aria-label", `x ${index + 1}`);
-    variableBank.append(variable);
-    variableSources.push(variable);
+  $("#matrix-stage")?.classList.remove("solution-revealing", "direct-solution-final");
+  const matrix = $("#matrix");
+  matrix?.classList.remove("direct-solution-transforming", "direct-solution-compacted");
+  if (matrix) {
+    matrix.style.width = "";
+    matrix.style.marginInline = "";
   }
-  variableBank.append(document.createElement("span"));
-
-  const matrixShell = document.createElement("div");
-  matrixShell.className = "solution-matrix-shell";
-  const leftBracket = document.createElement("span");
-  leftBracket.className = "solution-bracket left";
-  leftBracket.setAttribute("aria-hidden", "true");
-  const rightBracket = document.createElement("span");
-  rightBracket.className = "solution-bracket right";
-  rightBracket.setAttribute("aria-hidden", "true");
-  const grid = document.createElement("div");
-  grid.className = "solution-matrix-grid";
-
-  const diagonalCells = [];
-  const rightHandCells = [];
-  const zeroCells = [];
-  matrix.forEach((row, rowIndex) => {
-    const rowElement = document.createElement("div");
-    rowElement.className = "solution-matrix-row";
-    row.forEach((value, columnIndex) => {
-      const cell = document.createElement("span");
-      cell.className = "solution-matrix-cell";
-      if (columnIndex === row.length - 1) {
-        cell.classList.add("rhs");
-        rightHandCells.push(cell);
-      } else if (columnIndex === rowIndex) {
-        cell.classList.add("diagonal");
-        diagonalCells.push(cell);
-      } else {
-        cell.classList.add("zero");
-        zeroCells.push(cell);
-      }
-      if (columnIndex === rowIndex && columnIndex < row.length - 1) {
-        const one = document.createElement("span");
-        one.className = "solution-diagonal-one";
-        one.textContent = value.toString();
-        cell.append(one);
-      } else {
-        cell.textContent = value.toString();
-      }
-      rowElement.append(cell);
-    });
-    grid.append(rowElement);
+  $$(".direct-solution-flyer, .direct-solution-equals").forEach((element) => element.remove());
+  $$(".direct-variable-cell, .direct-zero-cell, .direct-value-cell").forEach((cell) => {
+    cell.classList.remove("direct-variable-cell", "direct-zero-cell", "direct-value-cell");
   });
-  matrixShell.append(leftBracket, grid, rightBracket);
-
-  const equations = document.createElement("div");
-  equations.className = "solution-equations";
-  const equationVariables = [];
-  const equationValues = [];
-  matrix.forEach((row, rowIndex) => {
-    const equation = document.createElement("div");
-    equation.className = "solution-equation";
-    const variable = document.createElement("span");
-    variable.className = "solution-equation-token variable";
-    variable.textContent = `x${rowIndex + 1}`;
-    const equals = document.createElement("span");
-    equals.className = "solution-equation-equals";
-    equals.textContent = "=";
-    const value = document.createElement("span");
-    value.className = "solution-equation-token value";
-    value.textContent = row[row.length - 1].toString();
-    equation.append(variable, equals, value);
-    equations.append(equation);
-    equationVariables.push(variable);
-    equationValues.push(value);
-  });
-
-  content.append(variableBank, matrixShell, equations);
-  reveal.append(content);
-  $("#matrix-stage").append(reveal);
-  return {
-    reveal,
-    grid,
-    leftBracket,
-    rightBracket,
-    variableSources,
-    diagonalCells,
-    rightHandCells,
-    zeroCells,
-    equationVariables,
-    equationValues,
-  };
 }
 
-function createSolutionFlyer(source, className = "") {
-  const rect = source.getBoundingClientRect();
-  const flyer = document.createElement("span");
-  flyer.className = `solution-flyer ${className}`.trim();
-  flyer.textContent = source.textContent;
-  flyer.style.left = `${rect.left}px`;
-  flyer.style.top = `${rect.top}px`;
-  flyer.style.width = `${rect.width}px`;
-  flyer.style.height = `${rect.height}px`;
-  document.body.append(flyer);
-  return { flyer, rect };
-}
-
-async function dropSolutionVariable(source, target, index, token) {
-  const delay = index * 125;
-  const { flyer, rect: sourceRect } = createSolutionFlyer(source, "variable");
+async function dropDirectSolutionVariable(target, index, stageRect, token) {
   const targetRect = target.getBoundingClientRect();
-  const deltaX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
-  const deltaY = targetRect.top + targetRect.height / 2 - (sourceRect.top + sourceRect.height / 2);
-  const one = target.querySelector("span") || target;
+  const startTop = stageRect.top - 42;
+  const flyer = document.createElement("span");
+  flyer.className = "direct-solution-flyer";
+  flyer.textContent = `x${index + 1}`;
+  flyer.style.left = `${targetRect.left}px`;
+  flyer.style.top = `${startTop}px`;
+  flyer.style.width = `${targetRect.width}px`;
+  flyer.style.height = `${targetRect.height}px`;
+  document.body.append(flyer);
 
-  source.animate(
-    [{ opacity: 1 }, { opacity: 0 }],
-    { duration: 110, delay, fill: "forwards", easing: "ease-in" },
-  );
-  one.animate(
+  const delay = index * 140;
+  const distance = targetRect.top - startTop;
+  const oneFade = target.animate(
     [
       { opacity: 1, transform: "translateY(0) scale(1)" },
-      { opacity: 0, transform: "translateY(12px) scale(0.42)" },
+      { opacity: 0, transform: "translateY(12px) scale(0.4)" },
     ],
-    { duration: 195, delay: delay + 400, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+    { duration: 180, delay: delay + 360, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
   );
-  const animation = flyer.animate(
+  const drop = flyer.animate(
     [
-      { opacity: 0, transform: "translate(0, -12px) scale(0.72)" },
-      { opacity: 1, offset: 0.14, transform: "translate(0, 0) scale(1)" },
-      {
-        opacity: 1,
-        offset: 0.72,
-        transform: `translate(${deltaX * 0.78}px, ${deltaY * 0.72 - 18}px) scale(1.12)`,
-      },
-      { opacity: 1, transform: `translate(${deltaX}px, ${deltaY}px) scale(1)` },
+      { opacity: 0, filter: "blur(3px)", transform: "translateY(-20px) scale(0.76)" },
+      { opacity: 1, offset: 0.16, filter: "blur(0)", transform: "translateY(0) scale(1)" },
+      { opacity: 1, offset: 0.78, transform: `translateY(${distance - 9}px) scale(1.12)` },
+      { opacity: 1, transform: `translateY(${distance}px) scale(1)` },
     ],
     {
-      duration: 680,
+      duration: 650,
       delay,
       fill: "both",
       easing: "cubic-bezier(0.68, 0, 0.18, 1.18)",
     },
   );
-  await animation.finished.catch(() => {});
-  if (token !== state.celebrationToken) {
-    flyer.remove();
-    return;
+  await drop.finished.catch(() => {});
+  oneFade.cancel();
+  if (token === state.celebrationToken) {
+    target.textContent = `x${index + 1}`;
+    target.classList.add("direct-variable-cell");
   }
-  target.textContent = source.textContent;
-  target.classList.add("variable-landed");
   flyer.remove();
 }
 
-async function morphSolutionToken(source, target, rowIndex, token) {
-  const { flyer, rect: sourceRect } = createSolutionFlyer(source, "morphing");
-  const targetRect = target.getBoundingClientRect();
-  const deltaX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
-  const deltaY = targetRect.top + targetRect.height / 2 - (sourceRect.top + sourceRect.height / 2);
-  source.style.opacity = "0";
-  const animation = flyer.animate(
-    [
-      { opacity: 1, filter: "blur(0)", transform: "translate(0, 0) scale(1)" },
-      {
-        opacity: 1,
-        offset: 0.68,
-        filter: "blur(0)",
-        transform: `translate(${deltaX * 0.82}px, ${deltaY * 0.82}px) scale(0.82)`,
-      },
-      { opacity: 0, filter: "blur(2px)", transform: `translate(${deltaX}px, ${deltaY}px) scale(0.72)` },
-    ],
-    {
-      duration: 650,
-      delay: rowIndex * 80,
-      fill: "both",
-      easing: "cubic-bezier(0.72, 0, 0.18, 1)",
-    },
-  );
-  await animation.finished.catch(() => {});
-  if (token === state.celebrationToken) target.classList.add("visible");
-  flyer.remove();
+function prepareDirectSolutionRows() {
+  const rows = $$("#matrix .matrix-row");
+  const diagonalCells = [];
+  const zeroCells = [];
+  rows.forEach((row, rowIndex) => {
+    const cells = [...row.querySelectorAll(".matrix-value")];
+    cells.forEach((cell, columnIndex) => {
+      if (columnIndex === rowIndex) {
+        diagonalCells.push(cell);
+        cell.classList.add("direct-variable-cell");
+      } else if (columnIndex === cells.length - 1) {
+        cell.classList.add("direct-value-cell");
+      } else {
+        zeroCells.push(cell);
+        cell.classList.add("direct-zero-cell");
+      }
+    });
+    const equals = document.createElement("span");
+    equals.className = "direct-solution-equals";
+    equals.textContent = "=";
+    row.append(equals);
+  });
+  return { rows, diagonalCells, zeroCells };
 }
 
-async function animateSolutionReveal(matrix, token) {
+async function animateSolutionReveal(token) {
   if (token !== state.celebrationToken) return;
   resetSolutionReveal();
-  const parts = buildSolutionReveal(matrix);
   const stage = $("#matrix-stage");
-  const originalMatrix = $("#matrix");
+  const sourceMatrix = $("#matrix");
+  const rows = $$("#matrix .matrix-row");
+  const diagonalCells = rows.map((row, rowIndex) =>
+    row.querySelectorAll(".matrix-value")[rowIndex]);
   stage.classList.add("solution-revealing");
-  window.requestAnimationFrame(() => {
-    parts.reveal.classList.add("ready");
-    originalMatrix.classList.add("solution-source-hidden");
-  });
 
   if (introReducedMotion()) {
-    parts.diagonalCells.forEach((cell, index) => { cell.textContent = `x${index + 1}`; });
-    parts.reveal.classList.add("variables-landed", "equations-forming", "solution-final");
-    parts.equationVariables.concat(parts.equationValues).forEach((tokenElement) => {
-      tokenElement.classList.add("visible");
-    });
+    diagonalCells.forEach((cell, index) => { cell.textContent = `x${index + 1}`; });
+    prepareDirectSolutionRows();
+    sourceMatrix.classList.add("direct-solution-compacted");
+    stage.classList.add("direct-solution-final");
     await wait(80);
     return;
   }
 
-  await wait(470);
+  await Promise.all(diagonalCells.map((cell, index) =>
+    dropDirectSolutionVariable(cell, index, stage.getBoundingClientRect(), token)));
   if (token !== state.celebrationToken) return;
-  parts.reveal.classList.add("variables-visible");
   await wait(430);
   if (token !== state.celebrationToken) return;
 
-  await Promise.all(parts.variableSources.map((source, index) =>
-    dropSolutionVariable(source, parts.diagonalCells[index], index, token)));
-  if (token !== state.celebrationToken) return;
-  parts.reveal.classList.add("variables-landed");
-  await wait(360);
-  if (token !== state.celebrationToken) return;
-
-  parts.reveal.classList.add("equations-forming");
-  const bracketAnimations = [
-    parts.leftBracket.animate(
-      [
-        { opacity: 1, transform: "translateX(0) scaleY(1)" },
-        { opacity: 0, transform: "translateX(-150px) rotate(-9deg) scaleY(0.7)" },
-      ],
-      { duration: 630, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
-    ),
-    parts.rightBracket.animate(
-      [
-        { opacity: 1, transform: "translateX(0) scaleY(1)" },
-        { opacity: 0, transform: "translateX(150px) rotate(9deg) scaleY(0.7)" },
-      ],
-      { duration: 630, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
-    ),
-  ];
-  parts.zeroCells.forEach((cell, index) => {
-    cell.animate(
-      [
-        { opacity: 1, filter: "blur(0)", transform: "scale(1)" },
-        { opacity: 0, filter: "blur(5px)", transform: "scale(0.18)" },
-      ],
-      { duration: 410, delay: index * 22, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
-    );
-  });
-  parts.grid.animate(
+  const parts = prepareDirectSolutionRows();
+  sourceMatrix.classList.add("direct-solution-transforming");
+  const zeroAnimations = parts.zeroCells.map((cell, index) => cell.animate(
     [
-      { opacity: 1, transform: "scale(1)" },
-      { opacity: 0.22, transform: "scale(0.72)" },
+      { opacity: 1, filter: "blur(0)", transform: "scale(1)" },
+      { opacity: 0, filter: "blur(5px)", transform: "scale(0.16)" },
     ],
-    { duration: 780, fill: "forwards", easing: "cubic-bezier(0.65, 0, 0.2, 1)" },
-  );
-
-  const morphs = [];
-  parts.diagonalCells.forEach((cell, rowIndex) => {
-    morphs.push(morphSolutionToken(cell, parts.equationVariables[rowIndex], rowIndex, token));
-    morphs.push(morphSolutionToken(parts.rightHandCells[rowIndex], parts.equationValues[rowIndex], rowIndex, token));
-  });
-  await Promise.all([...bracketAnimations.map((animation) => animation.finished.catch(() => {})), ...morphs]);
+    { duration: 390, delay: index * 24, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+  ));
+  await Promise.all(zeroAnimations.map((animation) => animation.finished.catch(() => {})));
   if (token !== state.celebrationToken) return;
-  parts.reveal.classList.add("solution-final");
-  await wait(1450);
+
+  zeroAnimations.forEach((animation) => animation.cancel());
+  const currentWidth = sourceMatrix.getBoundingClientRect().width;
+  const compactWidth = Math.min(330, currentWidth * 0.72);
+  sourceMatrix.style.width = `${currentWidth}px`;
+  sourceMatrix.style.marginInline = "auto";
+  void sourceMatrix.offsetWidth;
+  sourceMatrix.classList.add("direct-solution-compacted");
+  sourceMatrix.style.width = `${compactWidth}px`;
+  stage.classList.add("direct-solution-final");
+  await wait(1650);
 }
 
 function launchGameplayConfetti(token) {
