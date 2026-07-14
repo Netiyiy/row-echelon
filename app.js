@@ -193,7 +193,6 @@ class GameAudio {
     this.background.preload = "auto";
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
-      buttonDown: "assets/audio/intro/intro_button_down.wav",
       buttonUp: "assets/audio/intro/intro_button_up.wav",
       clack: "assets/audio/intro/intro_key_clack.wav",
       press: "assets/audio/intro/intro_key_press.wav",
@@ -2179,7 +2178,7 @@ async function formIntroMatrix(token) {
     $(".intro-bracket.left"),
     "intro-bracket-enter-left",
     0.54,
-    "buttonDown",
+    "press",
     token,
   );
   $("#intro-matrix").setAttribute("aria-hidden", "false");
@@ -2339,7 +2338,7 @@ async function runIntroAnimation() {
   const token = state.introToken;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
-  audio.playIntro("buttonDown");
+  audio.playIntro("press");
 
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
