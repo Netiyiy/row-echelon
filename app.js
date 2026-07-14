@@ -195,8 +195,8 @@ class GameAudio {
     this.background.preload = "auto";
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
-      click: "assets/audio/intro/intro_key_tick.wav?v=55",
-      finish: "assets/audio/intro/intro_button_up.wav?v=55",
+      click: "assets/audio/intro/intro_key_tick.wav?v=58",
+      finish: "assets/audio/intro/intro_button_up.wav?v=58",
     };
     this.introTemplates = Object.fromEntries(Object.entries(this.introFiles).map(([cue, source]) => {
       const player = new Audio(source);
