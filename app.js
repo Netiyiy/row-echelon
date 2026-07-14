@@ -183,6 +183,7 @@ function calculateScore({ level, steps, timeSeconds }) {
 class GameAudio {
   constructor() {
     this.backgroundVolume = 0.3;
+    this.introVolumeMultiplier = 10;
     this.duckedBackgroundVolume = 0.1;
     this.background = new Audio("assets/audio/row_echelon_music.mp3");
     this.background.loop = true;
@@ -287,7 +288,7 @@ class GameAudio {
       const source = this.introContext.createBufferSource();
       const gain = this.introContext.createGain();
       source.buffer = buffer;
-      gain.gain.value = this.backgroundVolume;
+      gain.gain.value = this.backgroundVolume * this.introVolumeMultiplier;
       source.connect(gain).connect(this.introContext.destination);
       this.introSources.add(source);
       source.onended = () => this.introSources.delete(source);
@@ -297,7 +298,7 @@ class GameAudio {
     const template = this.introTemplates[cue];
     if (!template) return;
     const player = template.cloneNode(true);
-    player.volume = this.backgroundVolume;
+    player.volume = Math.min(1, this.backgroundVolume * this.introVolumeMultiplier);
     this.effects.add(player);
     const cleanup = () => this.effects.delete(player);
     player.addEventListener("ended", cleanup, { once: true });
