@@ -656,10 +656,79 @@ h1 {
   letter-spacing: 0.08em;
 }
 
+.settings-button {
+  position: absolute;
+  z-index: 15;
+  left: max(20px, 6vw);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgb(163 110 79 / 58%);
+  border-radius: 10px;
+  color: var(--muted-cream);
+  background: rgb(92 61 48 / 78%);
+  box-shadow: 0 10px 22px rgb(0 0 0 / 18%);
+}
+
+.settings-button:hover,
+.settings-button:focus-visible,
+.settings-button.active {
+  border-color: var(--accent);
+  color: var(--cream);
+  outline: none;
+}
+
+.settings-button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.settings-button span {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.settings-menu {
+  position: absolute;
+  z-index: 15;
+  left: max(20px, 6vw);
+  bottom: calc(env(safe-area-inset-bottom) + 54px);
+  width: 112px;
+  padding: 8px;
+  border: 1px solid rgb(163 110 79 / 66%);
+  border-radius: 13px;
+  background: rgb(74 48 38 / 94%);
+  box-shadow: 0 18px 38px rgb(0 0 0 / 30%);
+}
+
+.logout-button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgb(224 158 92 / 60%);
+  border-radius: 10px;
+  color: var(--cream);
+  background: rgb(110 74 58 / 92%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.logout-button:hover,
+.logout-button:focus-visible {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+  outline: none;
+}
+
+.logout-button:disabled {
+  opacity: 0.45;
+}
+
 .version-label {
   position: absolute;
-  left: max(20px, 6vw);
-  bottom: calc(env(safe-area-inset-bottom) + 22px);
+  left: calc(max(20px, 6vw) + 40px);
+  bottom: calc(env(safe-area-inset-bottom) + 23px);
   color: rgb(199 163 125 / 72%);
   font-size: 8px;
   font-weight: 700;
@@ -885,8 +954,18 @@ h1 {
     bottom: 24px;
   }
 
-  .version-label {
+  .settings-button {
     left: clamp(42px, 7vw, 82px);
-    bottom: 28px;
+    bottom: 22px;
+  }
+
+  .settings-menu {
+    left: clamp(42px, 7vw, 82px);
+    bottom: 62px;
+  }
+
+  .version-label {
+    left: calc(clamp(42px, 7vw, 82px) + 42px);
+    bottom: 29px;
   }
 }

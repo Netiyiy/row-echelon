@@ -239,6 +239,7 @@ const state = {
   leaderboardVisible: false,
   accountMessage: "",
   celebrationToken: 0,
+  settingsOpen: false,
 };
 
 function loadPlayerSession() {
@@ -256,8 +257,17 @@ function savePlayerSession(session) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
+function clearPlayerSession() {
+  state.playerSession = null;
+  localStorage.removeItem(SESSION_KEY);
+}
+
 function signedIn() {
   return Boolean(state.playerSession?.token);
+}
+
+function isAuthError(error) {
+  return error?.status === 401 || /token|session/i.test(error?.message || "");
 }
 
 async function apiRequest(path, { method = "GET", body, auth = false } = {}) {
@@ -278,7 +288,9 @@ async function apiRequest(path, { method = "GET", body, auth = false } = {}) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || `Request failed (${response.status})`);
+    const requestError = new Error(data.error || `Request failed (${response.status})`);
+    requestError.status = response.status;
+    throw requestError;
   }
   return data;
 }
@@ -423,6 +435,12 @@ function renderAccount() {
   $(".game-shell").classList.toggle("account-locked", !hasPlayer);
   $("#player-label").textContent = hasPlayer ? state.playerSession.player.name : "NO PLAYER";
   $("#account-message").textContent = state.accountMessage;
+}
+
+function renderSettings() {
+  $("#settings-button").classList.toggle("active", state.settingsOpen);
+  $("#settings-menu").hidden = !state.settingsOpen;
+  $("#logout-button").disabled = !signedIn();
 }
 
 function leaderboardRows() {
@@ -679,9 +697,29 @@ async function refreshLeaderboard() {
     state.leaderboardMessage = "Rank is based on total points today.";
     setLeaderboardData(data);
   } catch (error) {
+    if (isAuthError(error)) {
+      clearPlayerAndLock("Session expired. Choose a name to play.");
+      startLevel(1);
+      return;
+    }
     state.leaderboardMessage = `Leaderboard offline: ${error.message}`;
     renderLeaderboard();
   }
+}
+
+function clearPlayerAndLock(message) {
+  clearLevelTimer();
+  clearPlayerSession();
+  state.settingsOpen = false;
+  state.leaderboard = [];
+  state.playerEntry = null;
+  state.leaderboardDate = "";
+  state.leaderboardMessage = "";
+  state.leaderboardVisible = false;
+  state.accountMessage = message;
+  state.resultAnimationToken += 1;
+  state.celebrationToken += 1;
+  render();
 }
 
 function launchLeaderboardConfetti() {
@@ -743,6 +781,11 @@ async function submitCompletedLevel(scoreBreakdown) {
       totalScore,
     };
   } catch (error) {
+    if (isAuthError(error)) {
+      clearPlayerAndLock("Session expired. Choose a name to play.");
+      startLevel(1);
+      return { scoreBreakdown, offline: true };
+    }
     state.leaderboardMessage = `Score not saved: ${error.message}`;
     return { scoreBreakdown, offline: true };
   }
@@ -789,6 +832,7 @@ function render() {
   renderMatrix();
   renderControls();
   renderAccount();
+  renderSettings();
   renderLeaderboard();
   updateScoreLabels();
 }
@@ -1015,6 +1059,13 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
   return true;
 }
 
+function logoutPlayer() {
+  if (!signedIn()) return;
+  audio.play("tap");
+  clearPlayerAndLock("Logged out. Choose a name to play.");
+  startLevel(1);
+}
+
 async function createAccount() {
   const input = $("#player-name-input");
   const name = input.value.trim();
@@ -1065,6 +1116,14 @@ $("#player-name-input").addEventListener("keydown", (event) => {
 
 $("#reset-button").addEventListener("click", resetLevel);
 $("#next-level-button").addEventListener("click", goToNextLevel);
+$("#settings-button").addEventListener("click", (event) => {
+  event.stopPropagation();
+  audio.play("tap");
+  state.settingsOpen = !state.settingsOpen;
+  renderSettings();
+});
+$("#settings-menu").addEventListener("click", (event) => event.stopPropagation());
+$("#logout-button").addEventListener("click", logoutPlayer);
 $("#factor-input").addEventListener("focus", (event) => {
   if (state.isSolved) {
     event.target.blur();
@@ -1083,6 +1142,16 @@ $("#factor-input").addEventListener("keydown", (event) => {
   }
 });
 
+document.addEventListener("click", () => {
+  if (!state.settingsOpen) return;
+  state.settingsOpen = false;
+  renderSettings();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !state.settingsOpen) return;
+  state.settingsOpen = false;
+  renderSettings();
+});
 document.addEventListener("pointerdown", () => audio.startMusic(), { once: true });
 
 if ("serviceWorker" in navigator) {
