@@ -547,9 +547,7 @@ function expirePlayerSession() {
     },
     keepalive: true,
   }).catch(() => {});
-  audio.suspend();
-  clearPlayerAndLock("Session timed out after 30 minutes of inactivity. Your username is available again.");
-  startLevel(1);
+  clearPlayerAndShowIntro("Session timed out after 30 minutes of inactivity. Your username is available again.");
   return true;
 }
 
@@ -570,9 +568,7 @@ async function keepSessionAlive() {
     state.lastHeartbeatAt = Date.now();
   } catch (error) {
     if (isAuthError(error)) {
-      audio.suspend();
-      clearPlayerAndLock("Session timed out after 30 minutes of inactivity. Your username is available again.");
-      startLevel(1);
+      clearPlayerAndShowIntro("Session timed out after 30 minutes of inactivity. Your username is available again.");
     }
   } finally {
     state.sessionHeartbeatPending = false;
@@ -1274,8 +1270,7 @@ async function refreshLeaderboard() {
     setLeaderboardData(data);
   } catch (error) {
     if (isAuthError(error)) {
-      clearPlayerAndLock("Session expired. Choose a name to play.");
-      startLevel(1);
+      clearPlayerAndShowIntro("Session expired. Choose a name to play.");
       return;
     }
     state.leaderboardMessage = `Leaderboard offline: ${error.message}`;
@@ -1300,6 +1295,12 @@ function clearPlayerAndLock(message) {
   state.resultAnimationToken += 1;
   state.celebrationToken += 1;
   render();
+}
+
+function clearPlayerAndShowIntro(message) {
+  clearPlayerAndLock(message);
+  startLevel(1);
+  showIntro();
 }
 
 function launchLeaderboardConfetti(rankImproved) {
@@ -1362,8 +1363,7 @@ async function submitCompletedLevel(scoreBreakdown) {
     };
   } catch (error) {
     if (isAuthError(error)) {
-      clearPlayerAndLock("Session expired. Choose a name to play.");
-      startLevel(1);
+      clearPlayerAndShowIntro("Session expired. Choose a name to play.");
       return { scoreBreakdown, offline: true };
     }
     state.leaderboardMessage = `Score not saved: ${error.message}`;
@@ -1771,9 +1771,7 @@ async function logoutPlayer() {
     await apiRequest("/api/logout", { method: "POST", auth: true });
   } catch (error) {
     if (isAuthError(error)) {
-      clearPlayerAndLock("Session ended. Choose a name to play.");
-      startLevel(1);
-      showIntro();
+      clearPlayerAndShowIntro("Session ended. Choose a name to play.");
       return;
     }
     state.endingSession = false;
@@ -1782,9 +1780,7 @@ async function logoutPlayer() {
     return;
   }
   state.endingSession = false;
-  clearPlayerAndLock("Session ended. Your username is available again.");
-  startLevel(1);
-  showIntro();
+  clearPlayerAndShowIntro("Session ended. Your username is available again.");
 }
 
 async function createAccount() {
@@ -2277,6 +2273,6 @@ if ("serviceWorker" in navigator) {
 startLevel(1);
 initializeSessionActivity();
 refreshLeaderboard();
-if (localStorage.getItem(INTRO_SEEN_KEY) !== "true") {
+if ((!signedIn() || localStorage.getItem(INTRO_SEEN_KEY) !== "true") && !state.introVisible) {
   showIntro();
 }
