@@ -99,6 +99,33 @@ const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clo
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
 const SOUND_KEY = "rowEchelonSoundEnabled";
+const INTRO_SEEN_KEY = "rowEchelonIntroSeenV1";
+const INTRO_MATRIX_STEPS = Object.freeze([
+  {
+    label: "GIVEN OUTPUTS",
+    values: [[6, 7, 0, 5], [1, 0, 1, 5], [2, 0, 4, 16]],
+  },
+  {
+    label: "R₁ ↔ R₂",
+    values: [[1, 0, 1, 5], [6, 7, 0, 5], [2, 0, 4, 16]],
+  },
+  {
+    label: "R₂ − 6R₁   ·   R₃ − 2R₁",
+    values: [[1, 0, 1, 5], [0, 7, -6, -25], [0, 0, 2, 6]],
+  },
+  {
+    label: "½R₃",
+    values: [[1, 0, 1, 5], [0, 7, -6, -25], [0, 0, 1, 3]],
+  },
+  {
+    label: "R₁ − R₃   ·   R₂ + 6R₃",
+    values: [[1, 0, 0, 2], [0, 7, 0, -7], [0, 0, 1, 3]],
+  },
+  {
+    label: "⅐R₂",
+    values: [[1, 0, 0, 2], [0, 1, 0, -1], [0, 0, 1, 3]],
+  },
+]);
 const SCORING = Object.freeze({
   A: 300,
   P: 1.22,
@@ -303,6 +330,9 @@ const state = {
   settingsOpen: false,
   settingsMessage: "",
   endingSession: false,
+  introVisible: false,
+  introRunning: false,
+  introToken: 0,
 };
 
 function loadPlayerSession() {
@@ -491,6 +521,7 @@ function resumeLevelTimer() {
     || state.levelStartedAt
     || state.isSolved
     || state.leaderboardVisible
+    || state.introVisible
     || !signedIn()
   ) return;
   runLevelTimer();
@@ -1448,6 +1479,363 @@ async function createAccount() {
   }
 }
 
+let introAudioContext = null;
+
+function introReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function prepareIntroAudio() {
+  if (!audio.enabled || document.hidden) return null;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return null;
+
+  if (!introAudioContext || introAudioContext.state === "closed") {
+    introAudioContext = new AudioContext();
+  }
+  if (introAudioContext.state === "suspended") {
+    introAudioContext.resume().catch(() => {});
+  }
+  return introAudioContext;
+}
+
+function playIntroTone({
+  frequency = 220,
+  endFrequency = frequency,
+  duration = 0.12,
+  delay = 0,
+  gain = 0.035,
+  type = "sine",
+} = {}) {
+  const context = prepareIntroAudio();
+  if (!context || context.state === "closed") return;
+
+  const startedAt = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const volume = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startedAt);
+  oscillator.frequency.exponentialRampToValueAtTime(
+    Math.max(1, endFrequency),
+    startedAt + duration,
+  );
+  volume.gain.setValueAtTime(0.0001, startedAt);
+  volume.gain.exponentialRampToValueAtTime(gain, startedAt + Math.min(0.025, duration / 3));
+  volume.gain.exponentialRampToValueAtTime(0.0001, startedAt + duration);
+  oscillator.connect(volume).connect(context.destination);
+  oscillator.start(startedAt);
+  oscillator.stop(startedAt + duration + 0.02);
+}
+
+function playIntroFinalClick() {
+  playIntroTone({
+    frequency: 155,
+    endFrequency: 62,
+    duration: 0.16,
+    gain: 0.075,
+    type: "triangle",
+  });
+  playIntroTone({
+    frequency: 1680,
+    endFrequency: 560,
+    duration: 0.055,
+    delay: 0.018,
+    gain: 0.045,
+    type: "square",
+  });
+  playIntroTone({
+    frequency: 620,
+    endFrequency: 410,
+    duration: 0.21,
+    delay: 0.035,
+    gain: 0.024,
+    type: "sine",
+  });
+}
+
+function resetIntroDom() {
+  const screen = $("#intro-screen");
+  screen.classList.remove(
+    "intro-running",
+    "intro-expanded",
+    "matrix-forming",
+    "rref-complete",
+    "intro-finishing",
+  );
+  $("#intro-equations-expanded").setAttribute("aria-hidden", "true");
+  $("#intro-matrix").setAttribute("aria-hidden", "true");
+  $("#intro-operation").textContent = "";
+  $("#intro-operation").classList.remove("visible");
+  $$(".intro-coefficient, .intro-variable, .intro-rhs-source").forEach((token) => {
+    token.style.opacity = "";
+  });
+  $$(".intro-matrix-cell").forEach((cell) => {
+    const [, column] = cell.dataset.introCell.split("-").map(Number);
+    cell.textContent = column === 3 ? "?" : "";
+    cell.classList.remove("landed", "value-visible", "changing");
+  });
+  $$(".intro-title-letter").forEach((letter) => {
+    letter.classList.remove("landed", "solution-landed");
+    letter.removeAttribute("data-solution-value");
+  });
+  $$(".intro-flyer").forEach((flyer) => flyer.remove());
+}
+
+function introDelay(duration, token) {
+  const adjustedDuration = introReducedMotion() ? Math.min(24, duration) : duration;
+  return wait(adjustedDuration).then(() => token === state.introToken);
+}
+
+async function flyIntroToken(source, target, {
+  kind = "number",
+  duration = 760,
+  delay = 0,
+  arc = -30,
+} = {}) {
+  if (!source || !target) return;
+  if (introReducedMotion()) return;
+
+  const sourceRect = source.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const flyer = document.createElement("span");
+  flyer.className = `intro-flyer ${kind}`;
+  flyer.textContent = source.textContent;
+  flyer.style.left = `${sourceRect.left}px`;
+  flyer.style.top = `${sourceRect.top}px`;
+  flyer.style.width = `${sourceRect.width}px`;
+  flyer.style.height = `${sourceRect.height}px`;
+  document.body.append(flyer);
+
+  const deltaX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
+  const deltaY = targetRect.top + targetRect.height / 2 - (sourceRect.top + sourceRect.height / 2);
+  const animation = flyer.animate(
+    [
+      { opacity: 0, transform: "translate(0, 0) scale(0.72)" },
+      { opacity: 1, offset: 0.12, transform: "translate(0, 0) scale(1)" },
+      {
+        opacity: 1,
+        offset: 0.68,
+        transform: `translate(${deltaX * 0.68}px, ${deltaY * 0.68 + arc}px) scale(1.08)`,
+      },
+      { opacity: 0, transform: `translate(${deltaX}px, ${deltaY}px) scale(0.76)` },
+    ],
+    {
+      duration,
+      delay,
+      easing: "cubic-bezier(0.16, 0.82, 0.18, 1)",
+      fill: "both",
+    },
+  );
+  await animation.finished.catch(() => {});
+  flyer.remove();
+}
+
+async function formIntroMatrix(token) {
+  const screen = $("#intro-screen");
+  screen.classList.add("matrix-forming");
+  $("#intro-matrix").setAttribute("aria-hidden", "false");
+  await introDelay(120, token);
+  if (token !== state.introToken) return false;
+
+  const flights = [];
+  $$(".intro-coefficient").forEach((source, index) => {
+    const target = $(`[data-intro-cell="${source.dataset.introRow}-${source.dataset.introCol}"]`);
+    target.textContent = source.textContent;
+    flights.push(flyIntroToken(source, target, {
+      delay: index * 34,
+      duration: 700 + (index % 3) * 55,
+      arc: 22 + (index % 3) * 6,
+    }));
+    source.style.opacity = "0";
+  });
+
+  $$(".intro-variable").forEach((source, index) => {
+    const target = $(`[data-intro-target-var="${source.dataset.introVar}"]`);
+    flights.push(flyIntroToken(source, target, {
+      kind: "variable",
+      delay: 50 + index * 28,
+      duration: 710,
+      arc: -54 - (index % 3) * 8,
+    }));
+    source.style.opacity = "0";
+  });
+
+  $$(".intro-rhs-source").forEach((source, row) => {
+    const target = $(`[data-intro-cell="${row}-3"]`);
+    flights.push(flyIntroToken(source, target, {
+      delay: 170 + row * 90,
+      duration: 720,
+      arc: 32,
+    }));
+    source.style.opacity = "0";
+  });
+
+  await Promise.all(flights);
+  if (token !== state.introToken) return false;
+  $$(".intro-matrix-cell").forEach((cell) => cell.classList.add("landed"));
+  $$(".intro-title-letter").forEach((letter) => letter.classList.add("landed"));
+  playIntroTone({ frequency: 280, endFrequency: 420, duration: 0.18, gain: 0.025 });
+  return true;
+}
+
+async function animateIntroMatrixStep(step, token, stepIndex) {
+  const operation = $("#intro-operation");
+  operation.classList.remove("visible");
+  await introDelay(90, token);
+  if (token !== state.introToken) return false;
+  operation.textContent = step.label;
+  operation.classList.add("visible");
+
+  const changes = [];
+  step.values.forEach((row, rowIndex) => {
+    row.forEach((value, columnIndex) => {
+      const cell = $(`[data-intro-cell="${rowIndex}-${columnIndex}"]`);
+      const nextValue = String(value);
+      if (cell.textContent === nextValue) {
+        cell.classList.add("value-visible");
+        return;
+      }
+      changes.push({ cell, nextValue, delay: (rowIndex * 4 + columnIndex) * 24 });
+    });
+  });
+
+  await Promise.all(changes.map(async ({ cell, nextValue, delay }) => {
+    if (!introReducedMotion()) {
+      await cell.animate(
+        [
+          { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
+          { opacity: 0, transform: "translateY(-16px) rotateX(68deg) scale(0.72)" },
+        ],
+        { duration: 190, delay, easing: "ease-in", fill: "forwards" },
+      ).finished.catch(() => {});
+    }
+    if (token !== state.introToken) return;
+    cell.textContent = nextValue;
+    cell.classList.add("value-visible", "changing");
+    if (!introReducedMotion()) {
+      await cell.animate(
+        [
+          { opacity: 0, transform: "translateY(17px) rotateX(-65deg) scale(0.75)" },
+          { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
+        ],
+        {
+          duration: 360,
+          delay: 20,
+          easing: "cubic-bezier(0.12, 1.16, 0.24, 1)",
+          fill: "forwards",
+        },
+      ).finished.catch(() => {});
+    }
+    cell.classList.remove("changing");
+  }));
+
+  if (token !== state.introToken) return false;
+  playIntroTone({
+    frequency: 185 + stepIndex * 42,
+    endFrequency: 255 + stepIndex * 48,
+    duration: 0.11,
+    gain: 0.025,
+    type: stepIndex % 2 ? "triangle" : "sine",
+  });
+  return true;
+}
+
+async function launchIntroSolutions(token) {
+  const solutions = [
+    { row: 0, variable: "r", value: "2" },
+    { row: 1, variable: "e", value: "−1" },
+    { row: 2, variable: "f", value: "3" },
+  ];
+
+  for (let index = 0; index < solutions.length; index += 1) {
+    const solution = solutions[index];
+    const source = $(`[data-intro-cell="${solution.row}-3"]`);
+    const target = $(`[data-intro-target-var="${solution.variable}"]`);
+    await flyIntroToken(source, target, {
+      kind: "solution",
+      duration: 620,
+      arc: -76,
+    });
+    if (token !== state.introToken) return false;
+    target.dataset.solutionValue = solution.value;
+    target.classList.add("solution-landed");
+    playIntroTone({
+      frequency: 420 + index * 140,
+      endFrequency: 560 + index * 160,
+      duration: 0.14,
+      gain: 0.035,
+    });
+    if (!(await introDelay(170, token))) return false;
+  }
+  return true;
+}
+
+async function finishIntro({ skipped = false, token = state.introToken } = {}) {
+  if (token !== state.introToken) return;
+  state.introRunning = false;
+  state.introVisible = false;
+  localStorage.setItem(INTRO_SEEN_KEY, "true");
+  $("#intro-screen").classList.add("intro-finishing");
+  document.body.classList.remove("intro-active");
+  await wait(introReducedMotion() || skipped ? 40 : 780);
+  if (token !== state.introToken) return;
+  $("#intro-screen").hidden = true;
+  resetIntroDom();
+  if (introAudioContext && introAudioContext.state !== "closed") {
+    introAudioContext.close().catch(() => {});
+  }
+  introAudioContext = null;
+  resumeLevelTimer();
+}
+
+async function runIntroAnimation() {
+  if (!state.introVisible || state.introRunning) return;
+  state.introRunning = true;
+  const token = state.introToken;
+  const screen = $("#intro-screen");
+  screen.classList.add("intro-running");
+  prepareIntroAudio();
+  playIntroTone({ frequency: 145, endFrequency: 235, duration: 0.42, gain: 0.035 });
+
+  if (!(await introDelay(480, token))) return;
+  screen.classList.add("intro-expanded");
+  $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
+  playIntroTone({ frequency: 260, endFrequency: 390, duration: 0.22, gain: 0.028 });
+
+  if (!(await introDelay(1450, token))) return;
+  if (!(await formIntroMatrix(token))) return;
+  if (!(await introDelay(380, token))) return;
+
+  for (let index = 0; index < INTRO_MATRIX_STEPS.length; index += 1) {
+    if (!(await animateIntroMatrixStep(INTRO_MATRIX_STEPS[index], token, index))) return;
+    if (!(await introDelay(index === 0 ? 460 : 320, token))) return;
+  }
+
+  $("#intro-operation").classList.remove("visible");
+  if (!(await introDelay(180, token))) return;
+  $("#intro-operation").textContent = "SOLUTION LOCKED";
+  $("#intro-operation").classList.add("visible");
+  if (!(await launchIntroSolutions(token))) return;
+  if (!(await introDelay(410, token))) return;
+
+  screen.classList.add("rref-complete");
+  $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
+  playIntroFinalClick();
+  if (!(await introDelay(1050, token))) return;
+  await finishIntro({ token });
+}
+
+function showIntro({ autoplay = false } = {}) {
+  state.introToken += 1;
+  state.introVisible = true;
+  state.introRunning = false;
+  pauseLevelTimer();
+  resetIntroDom();
+  $("#intro-screen").hidden = false;
+  document.body.classList.add("intro-active");
+  if (autoplay) runIntroAnimation();
+}
+
 $$(".operation-button").forEach((button) => {
   button.addEventListener("click", () => {
     if (state.isSolved) return;
@@ -1478,7 +1866,26 @@ $("#sound-button").addEventListener("click", () => {
   audio.setEnabled(!audio.enabled);
   renderSettings();
 });
+$("#replay-intro-button").addEventListener("click", () => {
+  audio.play("tap");
+  state.settingsOpen = false;
+  renderSettings();
+  audio.resumeFromUserGesture();
+  prepareIntroAudio();
+  showIntro({ autoplay: true });
+});
 $("#logout-button").addEventListener("click", logoutPlayer);
+$("#intro-begin").addEventListener("click", (event) => {
+  event.stopPropagation();
+  audio.resumeFromUserGesture();
+  prepareIntroAudio();
+  runIntroAnimation();
+});
+$("#intro-skip").addEventListener("click", (event) => {
+  event.stopPropagation();
+  state.introToken += 1;
+  finishIntro({ skipped: true, token: state.introToken });
+});
 $("#factor-input").addEventListener("focus", (event) => {
   if (state.isSolved) {
     event.target.blur();
@@ -1507,10 +1914,16 @@ document.addEventListener("keydown", (event) => {
   state.settingsOpen = false;
   renderSettings();
 });
-document.addEventListener("pointerdown", () => audio.resumeFromUserGesture());
+document.addEventListener("pointerdown", () => {
+  audio.resumeFromUserGesture();
+  if (state.introVisible && state.introRunning) prepareIntroAudio();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     audio.suspend();
+    if (introAudioContext?.state === "running") {
+      introAudioContext.suspend().catch(() => {});
+    }
     pauseLevelTimer();
     return;
   }
@@ -1518,11 +1931,17 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", () => {
   audio.suspend();
+  if (introAudioContext?.state === "running") {
+    introAudioContext.suspend().catch(() => {});
+  }
   pauseLevelTimer();
 });
 window.addEventListener("pageshow", () => resumeLevelTimer());
 document.addEventListener("freeze", () => {
   audio.suspend();
+  if (introAudioContext?.state === "running") {
+    introAudioContext.suspend().catch(() => {});
+  }
   pauseLevelTimer();
 });
 
@@ -1534,3 +1953,6 @@ if ("serviceWorker" in navigator) {
 
 startLevel(1);
 refreshLeaderboard();
+if (localStorage.getItem(INTRO_SEEN_KEY) !== "true") {
+  showIntro();
+}

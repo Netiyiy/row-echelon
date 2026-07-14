@@ -11,9 +11,97 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=24" />
+    <link rel="stylesheet" href="styles.css?v=25" />
   </head>
   <body>
+    <section id="intro-screen" class="intro-screen" aria-label="Introduction to row reduction" hidden>
+      <div class="intro-aurora" aria-hidden="true"></div>
+      <button id="intro-skip" class="intro-skip" type="button">SKIP</button>
+
+      <div class="intro-stage">
+        <p class="intro-kicker">FROM EQUATIONS TO RREF</p>
+
+        <div id="intro-equations" class="intro-equations">
+          <div id="intro-equations-original" class="intro-equation-set original">
+            <p>6r + 7e = <span>?</span></p>
+            <p>r + f = <span>?</span></p>
+            <p>2r + 4f = <span>?</span></p>
+          </div>
+
+          <div id="intro-equations-expanded" class="intro-equation-set expanded" aria-hidden="true">
+            <p>
+              <span class="intro-coefficient" data-intro-row="0" data-intro-col="0">6</span><span class="intro-variable" data-intro-var="r">r</span>
+              <span class="intro-operator">+</span>
+              <span class="intro-coefficient" data-intro-row="0" data-intro-col="1">7</span><span class="intro-variable" data-intro-var="e">e</span>
+              <span class="intro-operator">+</span>
+              <span class="intro-coefficient inserted" data-intro-row="0" data-intro-col="2">0</span><span class="intro-variable inserted" data-intro-var="f">f</span>
+              <span class="intro-operator">=</span><span class="intro-rhs-source">?</span>
+            </p>
+            <p>
+              <span class="intro-coefficient inserted" data-intro-row="1" data-intro-col="0">1</span><span class="intro-variable" data-intro-var="r">r</span>
+              <span class="intro-operator inserted">+</span>
+              <span class="intro-coefficient inserted" data-intro-row="1" data-intro-col="1">0</span><span class="intro-variable inserted" data-intro-var="e">e</span>
+              <span class="intro-operator">+</span>
+              <span class="intro-coefficient inserted" data-intro-row="1" data-intro-col="2">1</span><span class="intro-variable" data-intro-var="f">f</span>
+              <span class="intro-operator">=</span><span class="intro-rhs-source">?</span>
+            </p>
+            <p>
+              <span class="intro-coefficient" data-intro-row="2" data-intro-col="0">2</span><span class="intro-variable" data-intro-var="r">r</span>
+              <span class="intro-operator">+</span>
+              <span class="intro-coefficient inserted" data-intro-row="2" data-intro-col="1">0</span><span class="intro-variable inserted" data-intro-var="e">e</span>
+              <span class="intro-operator">+</span>
+              <span class="intro-coefficient" data-intro-row="2" data-intro-col="2">4</span><span class="intro-variable" data-intro-var="f">f</span>
+              <span class="intro-operator">=</span><span class="intro-rhs-source">?</span>
+            </p>
+          </div>
+        </div>
+
+        <div id="intro-matrix" class="intro-matrix" aria-hidden="true">
+          <div id="intro-matrix-title" class="intro-matrix-title" aria-label="r e f">
+            <span id="intro-rref-prefix" class="intro-rref-prefix">R</span>
+            <span class="intro-title-letter" data-intro-target-var="r">r</span>
+            <span class="intro-title-letter" data-intro-target-var="e">e</span>
+            <span class="intro-title-letter" data-intro-target-var="f">f</span>
+          </div>
+          <div class="intro-solution-values" aria-hidden="true">
+            <span data-intro-solution="r"></span>
+            <span data-intro-solution="e"></span>
+            <span data-intro-solution="f"></span>
+          </div>
+          <div class="intro-matrix-frame">
+            <span class="intro-bracket left" aria-hidden="true"></span>
+            <div class="intro-matrix-grid">
+              <div class="intro-matrix-row" data-intro-matrix-row="0">
+                <span class="intro-matrix-cell" data-intro-cell="0-0"></span>
+                <span class="intro-matrix-cell" data-intro-cell="0-1"></span>
+                <span class="intro-matrix-cell" data-intro-cell="0-2"></span>
+                <span class="intro-matrix-cell rhs" data-intro-cell="0-3">?</span>
+              </div>
+              <div class="intro-matrix-row" data-intro-matrix-row="1">
+                <span class="intro-matrix-cell" data-intro-cell="1-0"></span>
+                <span class="intro-matrix-cell" data-intro-cell="1-1"></span>
+                <span class="intro-matrix-cell" data-intro-cell="1-2"></span>
+                <span class="intro-matrix-cell rhs" data-intro-cell="1-3">?</span>
+              </div>
+              <div class="intro-matrix-row" data-intro-matrix-row="2">
+                <span class="intro-matrix-cell" data-intro-cell="2-0"></span>
+                <span class="intro-matrix-cell" data-intro-cell="2-1"></span>
+                <span class="intro-matrix-cell" data-intro-cell="2-2"></span>
+                <span class="intro-matrix-cell rhs" data-intro-cell="2-3">?</span>
+              </div>
+            </div>
+            <span class="intro-bracket right" aria-hidden="true"></span>
+          </div>
+          <p id="intro-operation" class="intro-operation" aria-live="polite"></p>
+        </div>
+
+        <button id="intro-begin" class="intro-begin" type="button">
+          <span>TAP TO BEGIN</span>
+          <i aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+
     <main class="game-shell" aria-label="Row Echelon game">
       <div class="top-glow" aria-hidden="true"></div>
 
@@ -132,12 +220,13 @@
       </button>
       <div id="settings-menu" class="settings-menu" role="group" aria-label="Settings" hidden>
         <button id="sound-button" class="settings-action" type="button" aria-pressed="true">SOUND ON</button>
+        <button id="replay-intro-button" class="settings-action" type="button">REPLAY INTRO</button>
         <button id="logout-button" class="logout-button" type="button">END SESSION</button>
         <p id="settings-message" class="settings-message" aria-live="polite"></p>
       </div>
-      <span class="version-label" aria-label="Version">v26</span>
+      <span class="version-label" aria-label="Version">v27</span>
     </main>
 
-    <script src="app.js?v=20" defer></script>
+    <script src="app.js?v=21" defer></script>
   </body>
 </html>
