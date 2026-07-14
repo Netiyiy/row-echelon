@@ -71,6 +71,7 @@ type PlayerRow = {
   token_hash: string;
   last_active_at: string;
   total_solved: number;
+  saved_progress: Record<string, unknown> | null;
 };
 
 type LeaderboardPlayer = {
@@ -108,6 +109,7 @@ function publicPlayer(player: PlayerRow) {
     name: player.name,
     createdAt: Date.parse(player.created_at),
     totalSolved: Number(player.total_solved) || 0,
+    savedProgress: player.saved_progress || null,
   };
 }
 
@@ -150,6 +152,74 @@ function validateName(name: string) {
   if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
     throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
   }
+}
+
+function validateSavedProgress(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+  const input = value as Record<string, unknown>;
+  const level = Number(input.level);
+  if (input.version !== 1 || !Number.isInteger(level) || level < 1 || level > 10_000) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+  if (input.pendingFreshLevel === true) {
+    return { version: 1, level, pendingFreshLevel: true };
+  }
+
+  const parseMatrix = (matrix: unknown) => {
+    if (!Array.isArray(matrix) || matrix.length !== 3) {
+      throw new HttpError(400, "Saved progress is invalid.");
+    }
+    return matrix.map((row) => {
+      if (!Array.isArray(row) || row.length !== 4) {
+        throw new HttpError(400, "Saved progress is invalid.");
+      }
+      return row.map((entry) => {
+        const text = String(entry);
+        if (text.length > 40 || !/^-?\d+(?:\/\d+)?$/.test(text)) {
+          throw new HttpError(400, "Saved progress is invalid.");
+        }
+        return text;
+      });
+    });
+  };
+
+  const history = Array.isArray(input.history) ? input.history : [];
+  if (history.length > 200) throw new HttpError(400, "Saved progress is too large.");
+  const mode = String(input.mode || "");
+  const factor = String(input.factor || "");
+  const selectedRow = input.selectedRow === null ? null : Number(input.selectedRow);
+  const steps = Number(input.steps);
+  const elapsedSeconds = Number(input.elapsedSeconds);
+  if (
+    !["swap", "add", "scale"].includes(mode)
+    || factor.length > 40
+    || !/^-?\d+(?:\/\d+)?$/.test(factor)
+    || (selectedRow !== null && (!Number.isInteger(selectedRow) || selectedRow < 0 || selectedRow > 2))
+    || !Number.isInteger(steps) || steps < 0 || steps > 1_000_000
+    || !Number.isFinite(elapsedSeconds) || elapsedSeconds < 0 || elapsedSeconds > 31_536_000
+  ) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+
+  const progress = {
+    version: 1,
+    level,
+    pendingFreshLevel: false,
+    matrix: parseMatrix(input.matrix),
+    originalMatrix: parseMatrix(input.originalMatrix),
+    history: history.map(parseMatrix),
+    mode,
+    factor,
+    selectedRow,
+    steps,
+    elapsedSeconds,
+  };
+  if (JSON.stringify(progress).length > 250_000) {
+    throw new HttpError(400, "Saved progress is too large.");
+  }
+  return progress;
 }
 
 function todayKey(date = new Date()) {
@@ -244,7 +314,7 @@ async function requirePlayer(request: Request) {
   const tokenHash = await sha256Hex(token);
   const { data, error } = await supabase
     .from("row_echelon_players")
-    .select("id,name,created_at,token_hash,last_active_at,total_solved")
+    .select("id,name,created_at,token_hash,last_active_at,total_solved,saved_progress")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -367,15 +437,25 @@ async function createAccount(request: Request) {
   const body = await readJson(request);
   const name = normalizeName(body.name);
   validateName(name);
+  const requireNew = body.requireNew === true;
+  const savedProgress = body.savedProgress === undefined
+    ? null
+    : validateSavedProgress(body.savedProgress);
+  if (savedProgress && !requireNew) {
+    throw new HttpError(400, "Saved progress can only be attached to a new username.");
+  }
 
   const nameKey = name.toLowerCase();
   const { data: existing, error: existingError } = await supabase
     .from("row_echelon_players")
-    .select("id,name,created_at,token_hash,last_active_at,total_solved")
+    .select("id,name,created_at,token_hash,last_active_at,total_solved,saved_progress")
     .eq("name_key", nameKey)
     .maybeSingle();
 
   if (existingError) throw existingError;
+  if (existing && requireNew) {
+    throw new HttpError(409, "Username is taken. Choose a new username to save offline progress.");
+  }
   if (existing && playerSessionActive(existing as PlayerRow)) {
     throw new HttpError(409, "Username is taken.");
   }
@@ -394,7 +474,7 @@ async function createAccount(request: Request) {
       })
       .eq("id", existingPlayer.id)
       .eq("token_hash", existingPlayer.token_hash)
-      .select("id,name,created_at,token_hash,last_active_at,total_solved")
+      .select("id,name,created_at,token_hash,last_active_at,total_solved,saved_progress")
       .maybeSingle();
 
     if (claimError) throw claimError;
@@ -414,8 +494,9 @@ async function createAccount(request: Request) {
       name_key: nameKey,
       token_hash: tokenHash,
       last_active_at: lastActiveAt,
+      saved_progress: savedProgress,
     })
-    .select("id,name,created_at,total_solved")
+    .select("id,name,created_at,total_solved,saved_progress")
     .single();
 
   if (error) {
@@ -430,6 +511,19 @@ async function createAccount(request: Request) {
     token,
     resumed: false,
   }, 201);
+}
+
+async function saveProgress(request: Request) {
+  const player = await requirePlayer(request);
+  const body = await readJson(request);
+  const savedProgress = validateSavedProgress(body.savedProgress);
+  const { error } = await supabase
+    .from("row_echelon_players")
+    .update({ saved_progress: savedProgress })
+    .eq("id", player.id)
+    .eq("token_hash", player.token_hash);
+  if (error) throw error;
+  return json({ savedProgress });
 }
 
 async function endSession(request: Request) {
@@ -582,6 +676,9 @@ Deno.serve(async (request) => {
     }
     if (request.method === "POST" && path === "/api/session") {
       return await keepSessionAlive(request);
+    }
+    if (request.method === "POST" && path === "/api/progress") {
+      return await saveProgress(request);
     }
 
     throw new HttpError(404, "Not found.");

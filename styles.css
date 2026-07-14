@@ -800,7 +800,8 @@ body.intro-active .game-shell {
 }
 
 .account-copy,
-.account-message {
+.account-message,
+.offline-copy {
   margin: 8px 0 0;
   color: var(--muted-cream);
   font-size: 12px;
@@ -809,7 +810,8 @@ body.intro-active .game-shell {
 }
 
 .player-name-input,
-.create-account-button {
+.create-account-button,
+.play-offline-button {
   width: 100%;
   min-height: 42px;
   margin-top: 12px;
@@ -838,6 +840,111 @@ body.intro-active .game-shell {
 
 .create-account-button:disabled {
   opacity: 0.58;
+}
+
+.account-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 13px 0 0;
+  color: var(--muted-cream);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.account-divider::before,
+.account-divider::after {
+  height: 1px;
+  flex: 1;
+  background: rgb(199 163 125 / 32%);
+  content: "";
+}
+
+.play-offline-button {
+  margin-top: 10px;
+  border-color: rgb(199 163 125 / 58%);
+  color: var(--cream);
+  background: rgb(74 48 38 / 72%);
+}
+
+.play-offline-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.offline-copy {
+  text-align: center;
+  font-size: 10px;
+}
+
+.offline-exit-dialog {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(35 22 17 / 88%);
+  backdrop-filter: blur(14px);
+}
+
+.offline-exit-card {
+  width: min(100%, 350px);
+  padding: 22px;
+  border: 1px solid rgb(224 158 92 / 68%);
+  border-radius: 24px;
+  color: var(--cream);
+  background: rgb(92 61 48 / 99%);
+  box-shadow: 0 28px 58px rgb(0 0 0 / 42%);
+  animation: account-card-enter 440ms cubic-bezier(0.12, 1.14, 0.24, 1) both;
+}
+
+.offline-exit-card h2 {
+  margin: 9px 0 0;
+  font-size: 27px;
+  letter-spacing: -0.04em;
+}
+
+.offline-exit-copy {
+  margin: 9px 0 2px;
+  color: var(--muted-cream);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.offline-save-account,
+.offline-discard-progress,
+.offline-cancel-exit {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 10px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.offline-save-account {
+  color: var(--cocoa);
+  background: var(--accent);
+}
+
+.offline-discard-progress {
+  border-color: rgb(220 126 104 / 65%);
+  color: #ffd8ce;
+  background: rgb(111 54 45 / 78%);
+}
+
+.offline-cancel-exit {
+  color: var(--cream);
+  background: rgb(74 48 38 / 70%);
+}
+
+.offline-exit-card button:disabled,
+.offline-exit-card input:disabled {
+  opacity: 0.52;
 }
 
 .top-glow {

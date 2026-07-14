@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=59" />
+    <link rel="stylesheet" href="styles.css?v=60" />
   </head>
   <body>
     <section id="intro-screen" class="intro-screen" aria-label="Introduction to row reduction" hidden>
@@ -122,7 +122,49 @@
           <button id="create-account-button" class="create-account-button" type="button">
             START
           </button>
+          <div class="account-divider" aria-hidden="true"><span>OR</span></div>
+          <button id="play-offline-button" class="play-offline-button" type="button">
+            PLAY OFFLINE
+          </button>
+          <p class="offline-copy">No timeout. Progress saves on this device.</p>
           <p id="account-message" class="account-message" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section
+        id="offline-exit-dialog"
+        class="offline-exit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="offline-exit-title"
+        hidden
+      >
+        <div class="offline-exit-card">
+          <p class="eyebrow">OFFLINE PROGRESS</p>
+          <h2 id="offline-exit-title">Leave Offline Mode?</h2>
+          <p class="offline-exit-copy">
+            Quitting will erase this saved offline run. Keep playing, discard it, or save the run to a new available username.
+          </p>
+          <input
+            id="offline-save-name"
+            class="player-name-input"
+            maxlength="18"
+            autocomplete="nickname"
+            autocapitalize="words"
+            spellcheck="false"
+            placeholder="New username"
+            aria-label="New username for offline progress"
+          />
+          <button id="offline-save-account" class="offline-save-account" type="button">
+            SAVE TO USERNAME
+          </button>
+          <button id="offline-discard-progress" class="offline-discard-progress" type="button">
+            QUIT &amp; LOSE PROGRESS
+          </button>
+          <button id="offline-cancel-exit" class="offline-cancel-exit" type="button">
+            KEEP PLAYING
+          </button>
+          <p id="offline-exit-message" class="account-message" aria-live="polite"></p>
         </div>
       </section>
 
@@ -222,9 +264,9 @@
         <button id="logout-button" class="logout-button" type="button">END SESSION</button>
         <p id="settings-message" class="settings-message" aria-live="polite"></p>
       </div>
-      <span class="version-label" aria-label="Version">v59</span>
+      <span class="version-label" aria-label="Version">v60</span>
     </main>
 
-    <script src="app.js?v=59" defer></script>
+    <script src="app.js?v=60" defer></script>
   </body>
 </html>

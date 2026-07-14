@@ -37,6 +37,7 @@ function publicPlayer(player) {
     name: player.name,
     createdAt: player.createdAt,
     totalSolved: Number(player.totalSolved) || 0,
+    savedProgress: player.savedProgress || null,
   };
 }
 
@@ -108,6 +109,72 @@ function validateName(name) {
   if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
     throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
   }
+}
+
+function validateSavedProgress(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+  const level = Number(value.level);
+  if (value.version !== 1 || !Number.isInteger(level) || level < 1 || level > 10_000) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+  if (value.pendingFreshLevel === true) {
+    return { version: 1, level, pendingFreshLevel: true };
+  }
+
+  const parseMatrix = (matrix) => {
+    if (!Array.isArray(matrix) || matrix.length !== 3) {
+      throw new HttpError(400, "Saved progress is invalid.");
+    }
+    return matrix.map((row) => {
+      if (!Array.isArray(row) || row.length !== 4) {
+        throw new HttpError(400, "Saved progress is invalid.");
+      }
+      return row.map((entry) => {
+        const text = String(entry);
+        if (text.length > 40 || !/^-?\d+(?:\/\d+)?$/.test(text)) {
+          throw new HttpError(400, "Saved progress is invalid.");
+        }
+        return text;
+      });
+    });
+  };
+
+  const history = Array.isArray(value.history) ? value.history : [];
+  if (history.length > 200) throw new HttpError(400, "Saved progress is too large.");
+  const mode = String(value.mode || "");
+  const factor = String(value.factor || "");
+  const selectedRow = value.selectedRow === null ? null : Number(value.selectedRow);
+  const steps = Number(value.steps);
+  const elapsedSeconds = Number(value.elapsedSeconds);
+  if (
+    !["swap", "add", "scale"].includes(mode)
+    || factor.length > 40
+    || !/^-?\d+(?:\/\d+)?$/.test(factor)
+    || (selectedRow !== null && (!Number.isInteger(selectedRow) || selectedRow < 0 || selectedRow > 2))
+    || !Number.isInteger(steps) || steps < 0 || steps > 1_000_000
+    || !Number.isFinite(elapsedSeconds) || elapsedSeconds < 0 || elapsedSeconds > 31_536_000
+  ) {
+    throw new HttpError(400, "Saved progress is invalid.");
+  }
+  const progress = {
+    version: 1,
+    level,
+    pendingFreshLevel: false,
+    matrix: parseMatrix(value.matrix),
+    originalMatrix: parseMatrix(value.originalMatrix),
+    history: history.map(parseMatrix),
+    mode,
+    factor,
+    selectedRow,
+    steps,
+    elapsedSeconds,
+  };
+  if (JSON.stringify(progress).length > 250_000) {
+    throw new HttpError(400, "Saved progress is too large.");
+  }
+  return progress;
 }
 
 function bearerToken(request) {
@@ -299,9 +366,19 @@ async function createAccount(request) {
   const body = await readJson(request);
   const name = normalizeName(body.name);
   validateName(name);
+  const requireNew = body.requireNew === true;
+  const savedProgress = body.savedProgress === undefined
+    ? null
+    : validateSavedProgress(body.savedProgress);
+  if (savedProgress && !requireNew) {
+    throw new HttpError(400, "Saved progress can only be attached to a new username.");
+  }
 
   return updateDb(async (db) => {
     const existing = consolidateUsernameProfiles(db, name);
+    if (existing && requireNew) {
+      throw new HttpError(409, "Username is taken. Choose a new username to save offline progress.");
+    }
     if (existing && !playerSessionReleased(existing)) {
       const error = new HttpError(409, "Username is taken.");
       error.persistDb = true;
@@ -327,6 +404,7 @@ async function createAccount(request) {
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
       totalSolved: 0,
+      savedProgress,
     };
     db.players.push(player);
     return {
@@ -334,6 +412,16 @@ async function createAccount(request) {
       token,
       resumed: false,
     };
+  });
+}
+
+async function saveProgress(request) {
+  const body = await readJson(request);
+  const savedProgress = validateSavedProgress(body.savedProgress);
+  return updateDb(async (db) => {
+    const player = requirePlayer(db, request);
+    player.savedProgress = savedProgress;
+    return { savedProgress };
   });
 }
 
@@ -469,6 +557,10 @@ async function handleRequest(request, response) {
   }
   if (request.method === "POST" && url.pathname === "/api/session") {
     send(response, 200, await keepSessionAlive(request));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/progress") {
+    send(response, 200, await saveProgress(request));
     return;
   }
 

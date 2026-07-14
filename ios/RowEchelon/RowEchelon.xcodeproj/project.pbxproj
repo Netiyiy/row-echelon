@@ -17,13 +17,13 @@
 
 /* Begin PBXFileReference section */
 		2676CDDFD9CD4236AF9F824A /* GameContainerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameContainerView.swift; sourceTree = "<group>"; };
-		286893E13F21EE6458A04DB7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		286893E13F21EE6458A04DB7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2A75F496696150BFD76234FA /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2FF035B55656D59ED77553F6 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		58A6556976B3ACCF2EC1466B /* RowEchelonApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RowEchelonApp.swift; sourceTree = "<group>"; };
 		84F65C766F1BAE2F421FCAA1 /* GameWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameWebView.swift; sourceTree = "<group>"; };
 		B93B08E91586F3D22AD9433D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		D1D77E6424B2D35DEA1B6147 /* RowEchelon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = RowEchelon.app; path = RowEchelon.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1D77E6424B2D35DEA1B6147 /* RowEchelon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RowEchelon.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,7 +48,6 @@
 				286893E13F21EE6458A04DB7 /* PrivacyInfo.xcprivacy */,
 				2A75F496696150BFD76234FA /* Assets.xcassets */,
 			);
-			name = RowEchelon;
 			path = RowEchelon;
 			sourceTree = "<group>";
 		};
@@ -114,6 +113,12 @@
 			attributes = {
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					FDF8F8A5B49FAD7B9B0F89CB = {
+						DevelopmentTeam = 53CL8FZ6B3;
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = BE19D7C85C1AA49809A20767 /* Build configuration list for PBXProject "RowEchelon" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -124,8 +129,6 @@
 				Base,
 			);
 			mainGroup = 56AF796FC474AAE090BF7C25;
-			minimizedProjectReferenceProxies = 0;
-			preferredProjectObjectVersion = 100;
 			productRefGroup = 20D2818B37E5E447F603FDC3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -261,7 +264,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 53CL8FZ6B3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -293,7 +296,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 53CL8FZ6B3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -367,8 +370,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

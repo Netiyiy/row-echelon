@@ -99,6 +99,7 @@ const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clo
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
 const SOUND_KEY = "rowEchelonSoundEnabled";
+const OFFLINE_PROGRESS_KEY = "rowEchelonOfflineProgressV1";
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_HEARTBEAT_MS = 5 * 60 * 1000;
 const SESSION_ACTIVITY_SAVE_MS = 10 * 1000;
@@ -536,6 +537,8 @@ class GameAudio {
 }
 
 const audio = new GameAudio();
+const initialPlayerSession = loadPlayerSession();
+const initialOfflineProgress = initialPlayerSession ? null : loadOfflineProgress();
 const state = {
   level: 1,
   matrix: [],
@@ -553,7 +556,7 @@ const state = {
   resultAnimationToken: 0,
   resultScoreBreakdown: null,
   lastLeaderboardResult: null,
-  playerSession: loadPlayerSession(),
+  playerSession: initialPlayerSession,
   leaderboard: [],
   playerEntry: null,
   leaderboardDate: "",
@@ -561,6 +564,7 @@ const state = {
   leaderboardVisible: false,
   resultsStage: "score",
   accountMessage: "",
+  offlineMode: Boolean(initialOfflineProgress),
   celebrationToken: 0,
   settingsOpen: false,
   settingsMessage: "",
@@ -574,6 +578,9 @@ const state = {
   lastHeartbeatAt: 0,
   sessionHeartbeatPending: false,
   sessionExpiring: false,
+  progressSaveTimer: null,
+  offlineExitOpen: false,
+  offlineSavePending: false,
 };
 
 function loadPlayerSession() {
@@ -590,10 +597,12 @@ function savePlayerSession(session) {
   const now = Date.now();
   session.lastActiveAt = now;
   state.playerSession = session;
+  state.offlineMode = false;
   state.lastActivityAt = now;
   state.lastActivitySavedAt = now;
   state.lastHeartbeatAt = now;
   state.sessionExpiring = false;
+  localStorage.removeItem(OFFLINE_PROGRESS_KEY);
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   scheduleSessionIdleTimeout();
 }
@@ -612,6 +621,158 @@ function clearPlayerSession() {
 
 function signedIn() {
   return Boolean(state.playerSession?.token);
+}
+
+function playingOffline() {
+  return state.offlineMode && !signedIn();
+}
+
+function canPlay() {
+  return signedIn() || playingOffline();
+}
+
+function loadOfflineProgress() {
+  try {
+    const progress = JSON.parse(localStorage.getItem(OFFLINE_PROGRESS_KEY) || "null");
+    return progress?.version === 1 ? progress : null;
+  } catch {
+    return null;
+  }
+}
+
+function serializeMatrix(matrix) {
+  return matrix.map((row) => row.map((value) => value.toString()));
+}
+
+function parseProgressMatrix(value) {
+  if (!Array.isArray(value) || value.length !== 3) return null;
+  const matrix = [];
+  for (const row of value) {
+    if (!Array.isArray(row) || row.length !== 4) return null;
+    const parsedRow = row.map((entry) => Fraction.parse(String(entry)));
+    if (parsedRow.some((entry) => !entry)) return null;
+    matrix.push(parsedRow);
+  }
+  return matrix;
+}
+
+function normalizedSavedProgress(value) {
+  if (!value || value.version !== 1) return null;
+  const level = Number(value.level);
+  if (!Number.isInteger(level) || level < 1 || level > 10_000) return null;
+  if (value.pendingFreshLevel === true) {
+    return { version: 1, level, pendingFreshLevel: true };
+  }
+
+  const matrix = parseProgressMatrix(value.matrix);
+  const originalMatrix = parseProgressMatrix(value.originalMatrix);
+  if (!matrix || !originalMatrix) return null;
+  const history = Array.isArray(value.history)
+    ? value.history.slice(-200).map(parseProgressMatrix).filter(Boolean)
+    : [];
+  const factor = Fraction.parse(String(value.factor || "-1"));
+  const mode = ["swap", "add", "scale"].includes(value.mode) ? value.mode : "add";
+  const selectedRow = value.selectedRow === null
+    ? null
+    : Number.isInteger(Number(value.selectedRow)) && Number(value.selectedRow) >= 0 && Number(value.selectedRow) < 3
+      ? Number(value.selectedRow)
+      : null;
+
+  return {
+    version: 1,
+    level,
+    pendingFreshLevel: false,
+    matrix,
+    originalMatrix,
+    history,
+    factor: factor || fraction(-1),
+    mode,
+    selectedRow,
+    steps: Math.max(0, Math.min(10_000, Math.floor(Number(value.steps) || 0))),
+    elapsedSeconds: Math.max(0, Math.min(31_536_000, Number(value.elapsedSeconds) || 0)),
+  };
+}
+
+function currentSavedProgress() {
+  if (state.isSolved) {
+    return {
+      version: 1,
+      level: state.level + 1,
+      pendingFreshLevel: true,
+    };
+  }
+  return {
+    version: 1,
+    level: state.level,
+    pendingFreshLevel: false,
+    matrix: serializeMatrix(state.matrix),
+    originalMatrix: serializeMatrix(state.originalMatrix),
+    history: state.history.slice(-200).map(serializeMatrix),
+    mode: state.mode,
+    factor: state.factor.toString(),
+    selectedRow: state.selectedRow,
+    steps: state.steps,
+    elapsedSeconds: state.levelStartedAt ? currentElapsedSeconds() : state.elapsedSeconds,
+  };
+}
+
+function persistGameProgress() {
+  if (!canPlay() || !state.matrix.length) return;
+  const progress = currentSavedProgress();
+  if (playingOffline()) {
+    try {
+      localStorage.setItem(OFFLINE_PROGRESS_KEY, JSON.stringify(progress));
+    } catch {
+      state.settingsMessage = "Offline progress could not be saved on this device.";
+    }
+    return;
+  }
+
+  state.playerSession.player.savedProgress = progress;
+  localStorage.setItem(SESSION_KEY, JSON.stringify(state.playerSession));
+  window.clearTimeout(state.progressSaveTimer);
+  state.progressSaveTimer = window.setTimeout(async () => {
+    try {
+      await apiRequest("/api/progress", {
+        method: "POST",
+        auth: true,
+        body: { savedProgress: progress },
+      });
+    } catch (error) {
+      if (isAuthError(error)) {
+        clearPlayerAndShowIntro("Session expired. Choose a name to play.");
+      }
+    }
+  }, 650);
+}
+
+function restoreSavedProgress(value) {
+  const progress = normalizedSavedProgress(value);
+  if (!progress) return false;
+  if (progress.pendingFreshLevel) {
+    startLevel(progress.level);
+    return true;
+  }
+
+  clearLevelTimer();
+  state.level = progress.level;
+  state.matrix = progress.matrix;
+  state.originalMatrix = progress.originalMatrix;
+  state.history = progress.history;
+  state.mode = progress.mode;
+  state.factor = progress.factor;
+  state.selectedRow = progress.selectedRow;
+  state.isSolved = false;
+  state.steps = progress.steps;
+  state.elapsedSeconds = progress.elapsedSeconds;
+  state.resultScoreBreakdown = null;
+  state.lastLeaderboardResult = null;
+  state.leaderboardVisible = false;
+  state.resultsStage = "score";
+  render();
+  animateLevelEntry("level");
+  if (canPlay()) runLevelTimer();
+  return true;
 }
 
 function isAuthError(error) {
@@ -832,7 +993,7 @@ function resumeLevelTimer() {
     || state.isSolved
     || state.leaderboardVisible
     || state.introVisible
-    || !signedIn()
+    || !canPlay()
   ) return;
   runLevelTimer();
 }
@@ -852,10 +1013,12 @@ function updateScoreLabels() {
 }
 
 function renderAccount() {
-  const hasPlayer = signedIn();
-  $("#account-gate").hidden = hasPlayer;
-  $(".game-shell").classList.toggle("account-locked", !hasPlayer);
-  $("#player-label").textContent = hasPlayer ? state.playerSession.player.name : "NO PLAYER";
+  const isPlaying = canPlay();
+  $("#account-gate").hidden = isPlaying;
+  $(".game-shell").classList.toggle("account-locked", !isPlaying);
+  $("#player-label").textContent = signedIn()
+    ? state.playerSession.player.name
+    : playingOffline() ? "OFFLINE" : "NO PLAYER";
   $("#account-message").textContent = state.accountMessage;
 }
 
@@ -868,17 +1031,22 @@ function renderSettings() {
   soundButton.textContent = audio.enabled ? "SOUND ON" : "SOUND OFF";
   soundButton.setAttribute("aria-pressed", String(audio.enabled));
   const logoutButton = $("#logout-button");
-  logoutButton.disabled = !signedIn() || state.endingSession;
-  logoutButton.textContent = state.endingSession ? "ENDING..." : "END SESSION";
+  logoutButton.disabled = !canPlay() || state.endingSession;
+  logoutButton.textContent = state.endingSession
+    ? "ENDING..."
+    : playingOffline() ? "QUIT OFFLINE SESSION" : "END SESSION";
   $("#settings-message").textContent = state.settingsMessage;
 }
 
 function renderResultsStage() {
   const screen = $("#results-screen");
   const isLeaderboardStage = state.resultsStage === "leaderboard";
+  const isOfflineResult = Boolean(state.lastLeaderboardResult?.offline);
   $("#score-view").hidden = !state.leaderboardVisible || isLeaderboardStage;
   $("#leaderboard-view").hidden = !state.leaderboardVisible || !isLeaderboardStage;
-  $("#next-level-button").textContent = isLeaderboardStage ? "NEXT LEVEL" : "NEXT";
+  $("#next-level-button").textContent = isLeaderboardStage || isOfflineResult
+    ? "NEXT LEVEL"
+    : "NEXT";
   screen.classList.toggle("score-stage", state.leaderboardVisible && !isLeaderboardStage);
   screen.classList.toggle("leaderboard-stage", state.leaderboardVisible && isLeaderboardStage);
 }
@@ -927,6 +1095,13 @@ function renderLeaderboard() {
 
   const rows = leaderboardRows();
   const list = $("#leaderboard-list");
+  if (playingOffline()) {
+    list.replaceChildren();
+    if (leaderboardMessage) {
+      leaderboardMessage.textContent = "Play online to join the daily leaderboard.";
+    }
+    return;
+  }
   if (!signedIn()) {
     list.replaceChildren();
     if (leaderboardMessage) {
@@ -995,7 +1170,9 @@ function renderRankSummary(result = {}) {
   if (!summary) return;
 
   if (result.offline) {
-    summary.textContent = "Score is local until the backend is online.";
+    summary.textContent = result.intentionalOffline
+      ? "Offline score • not added to the leaderboard"
+      : "Score could not be uploaded.";
     return;
   }
   if (result.rankImproved && result.previousRank && result.rank) {
@@ -1331,7 +1508,7 @@ async function showLeaderboardStage() {
 
 async function goToNextLevel() {
   if (!state.leaderboardVisible) return;
-  if (state.resultsStage !== "leaderboard") {
+  if (state.resultsStage !== "leaderboard" && !state.lastLeaderboardResult?.offline) {
     await showLeaderboardStage();
     return;
   }
@@ -1358,6 +1535,13 @@ async function goToNextLevel() {
 }
 
 async function refreshLeaderboard() {
+  if (playingOffline()) {
+    state.leaderboard = [];
+    state.playerEntry = null;
+    state.leaderboardMessage = "Play online to join the daily leaderboard.";
+    renderLeaderboard();
+    return;
+  }
   if (!signedIn()) {
     renderLeaderboard();
     return;
@@ -1380,6 +1564,13 @@ function clearPlayerAndLock(message) {
   clearLevelTimer();
   audio.suspend();
   clearPlayerSession();
+  state.offlineMode = false;
+  state.offlineExitOpen = false;
+  state.offlineSavePending = false;
+  window.clearTimeout(state.progressSaveTimer);
+  state.progressSaveTimer = null;
+  localStorage.removeItem(OFFLINE_PROGRESS_KEY);
+  $("#offline-exit-dialog").hidden = true;
   state.settingsOpen = false;
   state.settingsMessage = "";
   state.endingSession = false;
@@ -1425,6 +1616,9 @@ function launchLeaderboardConfetti(rankImproved) {
 }
 
 async function submitCompletedLevel(scoreBreakdown) {
+  if (playingOffline()) {
+    return { scoreBreakdown, offline: true, intentionalOffline: true };
+  }
   if (!signedIn()) {
     state.accountMessage = "Create a player before competing.";
     renderAccount();
@@ -1627,6 +1821,7 @@ function render() {
   renderSettings();
   renderLeaderboard();
   updateScoreLabels();
+  persistGameProgress();
 }
 
 function startLevel(level) {
@@ -1651,7 +1846,7 @@ function startLevel(level) {
   $("#sparkle-layer").replaceChildren();
   render();
   animateLevelEntry("level");
-  if (signedIn()) {
+  if (canPlay()) {
     startLevelTimer();
   }
 }
@@ -1670,8 +1865,8 @@ function applyChange(change, animation = {}) {
 
 function chooseRow(row) {
   if (state.isSolved) return;
-  if (!signedIn()) {
-    state.accountMessage = "Create a player first.";
+  if (!canPlay()) {
+    state.accountMessage = "Create a player or choose Play Offline first.";
     renderAccount();
     audio.play("tap");
     return;
@@ -1726,7 +1921,7 @@ function resetLevel() {
   render();
   animateLevelEntry("reset");
   restartAnimationClass($("#matrix-stage"), "reset-impact", 720);
-  if (signedIn()) {
+  if (canPlay()) {
     startLevelTimer();
   }
 }
@@ -2006,6 +2201,11 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
 }
 
 async function logoutPlayer() {
+  if (playingOffline()) {
+    audio.play("tap");
+    openOfflineExitDialog();
+    return;
+  }
   if (!signedIn() || state.endingSession) return;
   audio.play("tap");
   state.endingSession = true;
@@ -2025,6 +2225,90 @@ async function logoutPlayer() {
   }
   state.endingSession = false;
   clearPlayerAndShowIntro("Session ended. Your username is available again.");
+}
+
+function startOfflinePlay() {
+  audio.play("tap");
+  clearPlayerSession();
+  state.offlineMode = true;
+  state.accountMessage = "";
+  state.leaderboard = [];
+  state.playerEntry = null;
+  state.leaderboardDate = "";
+  state.leaderboardMessage = "Play online to join the daily leaderboard.";
+  startLevel(1);
+}
+
+function setOfflineExitPending(pending) {
+  state.offlineSavePending = pending;
+  $("#offline-save-name").disabled = pending;
+  $("#offline-save-account").disabled = pending;
+  $("#offline-discard-progress").disabled = pending;
+  $("#offline-cancel-exit").disabled = pending;
+  $("#offline-save-account").textContent = pending ? "SAVING..." : "SAVE TO USERNAME";
+}
+
+function openOfflineExitDialog() {
+  if (!playingOffline() || state.offlineExitOpen) return;
+  pauseLevelTimer();
+  persistGameProgress();
+  state.offlineExitOpen = true;
+  state.settingsOpen = false;
+  state.settingsMessage = "";
+  $("#offline-exit-message").textContent = "";
+  $("#offline-save-name").value = "";
+  $("#offline-exit-dialog").hidden = false;
+  setOfflineExitPending(false);
+  renderSettings();
+  window.setTimeout(() => $("#offline-save-name").focus(), 120);
+}
+
+function closeOfflineExitDialog({ resume = true } = {}) {
+  if (state.offlineSavePending) return;
+  state.offlineExitOpen = false;
+  $("#offline-exit-dialog").hidden = true;
+  if (resume && canPlay()) resumeLevelTimer();
+}
+
+function discardOfflineProgress() {
+  if (!playingOffline() || state.offlineSavePending) return;
+  state.offlineExitOpen = false;
+  $("#offline-exit-dialog").hidden = true;
+  localStorage.removeItem(OFFLINE_PROGRESS_KEY);
+  clearPlayerAndShowIntro("Offline progress was erased. Create a player or start a new offline run.");
+}
+
+async function saveOfflineProgressToAccount() {
+  if (!playingOffline() || state.offlineSavePending) return;
+  const input = $("#offline-save-name");
+  const name = input.value.trim();
+  if (name.length < 2) {
+    $("#offline-exit-message").textContent = "Use at least 2 characters.";
+    return;
+  }
+
+  pauseLevelTimer();
+  const savedProgress = currentSavedProgress();
+  setOfflineExitPending(true);
+  $("#offline-exit-message").textContent = "Creating a new player and saving progress...";
+  try {
+    const session = await apiRequest("/api/accounts", {
+      method: "POST",
+      body: { name, requireNew: true, savedProgress },
+    });
+    savePlayerSession(session);
+    state.offlineExitOpen = false;
+    $("#offline-exit-dialog").hidden = true;
+    state.leaderboardMessage = `Progress saved to ${session.player.name}. Future scores can join the leaderboard.`;
+    state.settingsMessage = "Offline progress saved to your new player.";
+    render();
+    resumeLevelTimer();
+    await refreshLeaderboard();
+  } catch (error) {
+    $("#offline-exit-message").textContent = error.message;
+  } finally {
+    setOfflineExitPending(false);
+  }
 }
 
 async function createAccount() {
@@ -2050,7 +2334,7 @@ async function createAccount() {
       ? `Welcome back, ${session.player.name}. Your previous points are restored.`
       : "Account ready. Solve levels to climb.";
     input.value = "";
-    startLevel(state.level);
+    if (!restoreSavedProgress(session.player.savedProgress)) startLevel(1);
     await refreshLeaderboard();
   } catch (error) {
     state.accountMessage = error.message;
@@ -2411,6 +2695,16 @@ $$(".operation-button").forEach((button) => {
 });
 
 $("#create-account-button").addEventListener("click", createAccount);
+$("#play-offline-button").addEventListener("click", startOfflinePlay);
+$("#offline-save-account").addEventListener("click", saveOfflineProgressToAccount);
+$("#offline-discard-progress").addEventListener("click", discardOfflineProgress);
+$("#offline-cancel-exit").addEventListener("click", () => closeOfflineExitDialog());
+$("#offline-save-name").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  saveOfflineProgressToAccount();
+});
+$("#offline-exit-dialog").addEventListener("click", (event) => event.stopPropagation());
 $("#player-name-input").addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
@@ -2472,6 +2766,10 @@ document.addEventListener("click", () => {
   renderSettings();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.offlineExitOpen) {
+    closeOfflineExitDialog();
+    return;
+  }
   if (event.key !== "Escape" || !state.settingsOpen) return;
   state.settingsOpen = false;
   renderSettings();
@@ -2485,6 +2783,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     if (SUSPEND_AUDIO_WHEN_HIDDEN) audio.suspend();
     pauseLevelTimer();
+    persistGameProgress();
     return;
   }
   if (checkSessionInactivity()) return;
@@ -2492,8 +2791,9 @@ document.addEventListener("visibilitychange", () => {
   resumeLevelTimer();
 });
 window.addEventListener("pagehide", () => {
-  audio.suspend();
   pauseLevelTimer();
+  persistGameProgress();
+  audio.suspend();
 });
 window.addEventListener("pageshow", () => {
   if (checkSessionInactivity()) return;
@@ -2501,8 +2801,9 @@ window.addEventListener("pageshow", () => {
   resumeLevelTimer();
 });
 document.addEventListener("freeze", () => {
-  audio.suspend();
   pauseLevelTimer();
+  persistGameProgress();
+  audio.suspend();
 });
 
 if ("serviceWorker" in navigator) {
@@ -2511,10 +2812,11 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-startLevel(1);
+const startupProgress = initialPlayerSession?.player?.savedProgress || initialOfflineProgress;
+if (!restoreSavedProgress(startupProgress)) startLevel(1);
 initializeSessionActivity();
 refreshLeaderboard();
-if ((!signedIn() || localStorage.getItem(INTRO_SEEN_KEY) !== "true") && !state.introVisible) {
+if ((!canPlay() || localStorage.getItem(INTRO_SEEN_KEY) !== "true") && !state.introVisible) {
   showIntro();
 }
 audio.resumeFromAppActivation();
