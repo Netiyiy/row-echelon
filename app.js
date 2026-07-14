@@ -1789,6 +1789,7 @@ async function formIntroMatrix(token) {
 
   $$(".intro-rhs-source").forEach((source, row) => {
     const target = $(`[data-intro-cell="${row}-3"]`);
+    target.textContent = source.textContent;
     flights.push(flyIntroToken(source, target, {
       delay: 70 + row * 34,
       duration: 440,
