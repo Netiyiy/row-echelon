@@ -194,7 +194,6 @@ class GameAudio {
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
       buttonUp: "assets/audio/intro/intro_button_up.wav",
-      clack: "assets/audio/intro/intro_key_clack.wav",
       press: "assets/audio/intro/intro_key_press.wav",
       soft: "assets/audio/intro/intro_key_soft.wav",
       tick: "assets/audio/intro/intro_key_tick.wav",
@@ -2470,7 +2469,7 @@ async function runIntroAnimation() {
     $(".intro-bracket.left"),
     "intro-bracket-lock-left",
     0.34,
-    "clack",
+    "buttonUp",
     token,
   );
   cueIntroAnimationAt(
