@@ -1176,6 +1176,120 @@ function renderMatrix() {
   );
 }
 
+function restartAnimationClass(element, className, removeAfter = 700) {
+  if (!element) return;
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  window.setTimeout(() => element.classList.remove(className), removeAfter);
+}
+
+function animateLevelEntry(kind = "level") {
+  if (introReducedMotion()) return;
+  const playView = $("#play-view");
+  playView.dataset.entryKind = kind;
+  restartAnimationClass(playView, "gameplay-entering", 920);
+}
+
+function animateChangedCells(previousMatrix) {
+  if (introReducedMotion()) return;
+  $$(".matrix-row").forEach((rowElement, rowIndex) => {
+    [...rowElement.querySelectorAll(".matrix-value")].forEach((cell, columnIndex) => {
+      const before = previousMatrix[rowIndex]?.[columnIndex]?.toString();
+      const after = state.matrix[rowIndex]?.[columnIndex]?.toString();
+      if (before === after) return;
+      cell.animate(
+        [
+          { opacity: 0, filter: "blur(7px)", transform: "translateY(15px) rotateX(-68deg) scale(0.72)" },
+          { opacity: 1, filter: "blur(0)", offset: 0.7, transform: "translateY(-3px) rotateX(9deg) scale(1.15)" },
+          { opacity: 1, filter: "blur(0)", transform: "translateY(0) rotateX(0) scale(1)" },
+        ],
+        {
+          duration: 410,
+          delay: rowIndex * 34 + columnIndex * 42,
+          easing: "cubic-bezier(0.12, 1.18, 0.24, 1)",
+        },
+      );
+    });
+  });
+}
+
+function addRowTransferTracer(sourceRow, targetRow) {
+  const stage = $("#matrix-stage");
+  if (!stage || !sourceRow || !targetRow || introReducedMotion()) return;
+  const stageRect = stage.getBoundingClientRect();
+  const sourceRect = sourceRow.getBoundingClientRect();
+  const targetRect = targetRow.getBoundingClientRect();
+  const tracer = document.createElement("span");
+  tracer.className = "row-transfer-tracer";
+  tracer.style.left = `${stageRect.width - 24}px`;
+  tracer.style.top = "0";
+  stage.append(tracer);
+  const fromY = sourceRect.top + sourceRect.height / 2 - stageRect.top;
+  const toY = targetRect.top + targetRect.height / 2 - stageRect.top;
+  tracer.animate(
+    [
+      { opacity: 0, transform: `translateY(${fromY}px) scale(0.3)` },
+      { opacity: 1, offset: 0.18, transform: `translateY(${fromY}px) scale(1.35)` },
+      { opacity: 1, offset: 0.74, transform: `translateY(${toY}px) scale(0.9)` },
+      { opacity: 0, transform: `translateY(${toY}px) scale(2.2)` },
+    ],
+    {
+      duration: 440,
+      easing: "cubic-bezier(0.72, 0, 0.2, 1)",
+      fill: "both",
+    },
+  ).finished.catch(() => {}).finally(() => tracer.remove());
+}
+
+function animateGameplayChange({ kind, source = null, target = null, previousMatrix }) {
+  if (introReducedMotion()) return;
+  const stage = $("#matrix-stage");
+  restartAnimationClass(stage, "operation-impact", 620);
+  restartAnimationClass($("#current-score"), "hud-bump", 440);
+  animateChangedCells(previousMatrix);
+
+  const sourceRow = source === null ? null : $(`.matrix-row[data-row="${source}"]`);
+  const targetRow = target === null ? null : $(`.matrix-row[data-row="${target}"]`);
+
+  if (kind === "swap" && sourceRow && targetRow) {
+    const distance = targetRow.offsetTop - sourceRow.offsetTop;
+    sourceRow.animate(
+      [
+        { zIndex: 3, filter: "brightness(1.35)", transform: `translateY(${distance}px) scale(1.035)` },
+        { zIndex: 3, offset: 0.72, transform: "translateY(-5px) scale(1.02)" },
+        { zIndex: 1, filter: "brightness(1)", transform: "translateY(0) scale(1)" },
+      ],
+      { duration: 560, easing: "cubic-bezier(0.12, 1.08, 0.24, 1)" },
+    );
+    targetRow.animate(
+      [
+        { zIndex: 2, filter: "brightness(1.2)", transform: `translateY(${-distance}px) scale(0.98)` },
+        { zIndex: 2, offset: 0.72, transform: "translateY(5px) scale(1.02)" },
+        { zIndex: 1, filter: "brightness(1)", transform: "translateY(0) scale(1)" },
+      ],
+      { duration: 560, easing: "cubic-bezier(0.12, 1.08, 0.24, 1)" },
+    );
+    restartAnimationClass(stage, "swap-impact", 620);
+    return;
+  }
+
+  if (kind === "add" && sourceRow && targetRow) {
+    sourceRow.classList.add("operation-source");
+    targetRow.classList.add("operation-target");
+    addRowTransferTracer(sourceRow, targetRow);
+    window.setTimeout(() => {
+      sourceRow.classList.remove("operation-source");
+      targetRow.classList.remove("operation-target");
+    }, 620);
+    return;
+  }
+
+  if (kind === "scale" && targetRow) {
+    restartAnimationClass(targetRow, "operation-scale", 620);
+  }
+}
+
 function renderControls() {
   $$(".operation-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
@@ -1220,18 +1334,21 @@ function startLevel(level) {
   $(".game-shell").classList.remove("leaderboard-visible", "results-next");
   $("#sparkle-layer").replaceChildren();
   render();
+  animateLevelEntry("level");
   if (signedIn()) {
     startLevelTimer();
   }
 }
 
-function applyChange(change) {
-  state.history.push(cloneMatrix(state.matrix));
+function applyChange(change, animation = {}) {
+  const previousMatrix = cloneMatrix(state.matrix);
+  state.history.push(previousMatrix);
   change();
   state.steps += 1;
   state.selectedRow = null;
   state.isSolved = isGameSolved(state.matrix);
   render();
+  animateGameplayChange({ ...animation, previousMatrix });
   if (state.isSolved) completeLevel();
 }
 
@@ -1247,7 +1364,7 @@ function chooseRow(row) {
     audio.play("apply");
     applyChange(() => {
       state.matrix[row] = state.matrix[row].map((value) => value.multiply(state.factor));
-    });
+    }, { kind: "scale", target: row });
     return;
   }
 
@@ -1275,7 +1392,7 @@ function chooseRow(row) {
         value.add(state.factor.multiply(state.matrix[source][column])),
       );
     }
-  });
+  }, { kind: state.mode, source, target: row });
 }
 
 function resetLevel() {
@@ -1291,6 +1408,8 @@ function resetLevel() {
   state.leaderboardVisible = false;
   state.resultsStage = "score";
   render();
+  animateLevelEntry("reset");
+  restartAnimationClass($("#matrix-stage"), "reset-impact", 720);
   if (signedIn()) {
     startLevelTimer();
   }
@@ -1315,7 +1434,7 @@ async function completeLevel() {
 
   const token = ++state.celebrationToken;
   const reduced = reducedRowEchelonForm(state.matrix);
-  await wait(150);
+  await wait(520);
 
   for (let row = state.matrix.length - 1; row >= 0; row -= 1) {
     if (token !== state.celebrationToken) return;
@@ -1421,6 +1540,7 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
   input.classList.remove("invalid");
   input.removeAttribute("aria-invalid");
   renderMatrix();
+  restartAnimationClass(input, "factor-accepted", 420);
   return true;
 }
 
@@ -1689,7 +1809,7 @@ async function formIntroMatrix(token) {
 async function animateIntroMatrixStep(step, token, stepIndex) {
   const operation = $("#intro-operation");
   operation.classList.remove("visible");
-  await introDelay(35, token);
+  await introDelay(22, token);
   if (token !== state.introToken) return false;
   operation.textContent = step.label;
   operation.classList.add("visible");
@@ -1707,7 +1827,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
         cell.classList.add("value-visible");
         return;
       }
-      changes.push({ cell, nextValue, delay: (rowIndex * 4 + columnIndex) * 8 });
+      changes.push({ cell, nextValue, delay: (rowIndex * 4 + columnIndex) * 4 });
     });
   });
 
@@ -1718,7 +1838,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
           { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
           { opacity: 0, transform: "translateY(-16px) rotateX(68deg) scale(0.72)" },
         ],
-        { duration: 85, delay, easing: "cubic-bezier(0.76, 0, 0.84, 0)", fill: "forwards" },
+        { duration: 62, delay, easing: "cubic-bezier(0.76, 0, 0.84, 0)", fill: "forwards" },
       ).finished.catch(() => {});
     }
     if (token !== state.introToken) return;
@@ -1731,8 +1851,8 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
           { opacity: 1, transform: "translateY(0) rotateX(0) scale(1)" },
         ],
         {
-          duration: 185,
-          delay: 5,
+          duration: 130,
+          delay: 3,
           easing: "cubic-bezier(0.08, 1.42, 0.18, 1)",
           fill: "forwards",
         },
@@ -1765,7 +1885,7 @@ async function launchIntroSolutions(token) {
     const target = $(`[data-intro-target-var="${solution.variable}"]`);
     await flyIntroToken(source, target, {
       kind: "solution",
-      duration: 370,
+      duration: 480,
       arc: -92,
     });
     if (token !== state.introToken) return false;
@@ -1777,7 +1897,7 @@ async function launchIntroSolutions(token) {
       duration: 0.14,
       gain: 0.035,
     });
-    if (!(await introDelay(60, token))) return false;
+    if (!(await introDelay(105, token))) return false;
   }
   return true;
 }
@@ -1789,7 +1909,7 @@ async function finishIntro({ skipped = false, token = state.introToken } = {}) {
   localStorage.setItem(INTRO_SEEN_KEY, "true");
   $("#intro-screen").classList.add("intro-finishing");
   document.body.classList.remove("intro-active");
-  await wait(introReducedMotion() || skipped ? 40 : 520);
+  await wait(introReducedMotion() || skipped ? 40 : 650);
   if (token !== state.introToken) return;
   $("#intro-screen").hidden = true;
   resetIntroDom();
@@ -1809,32 +1929,32 @@ async function runIntroAnimation() {
   prepareIntroAudio();
   playIntroTone({ frequency: 145, endFrequency: 235, duration: 0.42, gain: 0.035 });
 
-  if (!(await introDelay(260, token))) return;
+  if (!(await introDelay(420, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
   playIntroTone({ frequency: 260, endFrequency: 390, duration: 0.22, gain: 0.028 });
 
-  if (!(await introDelay(760, token))) return;
+  if (!(await introDelay(1050, token))) return;
   if (!(await formIntroMatrix(token))) return;
-  if (!(await introDelay(150, token))) return;
+  if (!(await introDelay(240, token))) return;
 
   for (let index = 0; index < INTRO_MATRIX_STEPS.length; index += 1) {
     if (!(await animateIntroMatrixStep(INTRO_MATRIX_STEPS[index], token, index))) return;
-    if (!(await introDelay(index === 0 ? 140 : 90, token))) return;
+    if (!(await introDelay(index === 0 ? 75 : 45, token))) return;
   }
 
   $("#intro-operation").classList.remove("visible");
-  if (!(await introDelay(70, token))) return;
+  if (!(await introDelay(120, token))) return;
   $("#intro-operation").textContent = "SOLUTION LOCKED";
   $("#intro-operation").classList.add("visible");
   if (!(await launchIntroSolutions(token))) return;
-  if (!(await introDelay(170, token))) return;
+  if (!(await introDelay(300, token))) return;
 
   screen.classList.remove("matrix-impact");
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
   playIntroFinalClick();
-  if (!(await introDelay(650, token))) return;
+  if (!(await introDelay(980, token))) return;
   await finishIntro({ token });
 }
 
@@ -1856,6 +1976,7 @@ $$(".operation-button").forEach((button) => {
     state.mode = button.dataset.mode;
     state.selectedRow = null;
     render();
+    restartAnimationClass(button, "mode-activated", 440);
   });
 });
 

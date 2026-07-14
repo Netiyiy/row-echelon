@@ -78,9 +78,9 @@ body.intro-active .game-shell {
     linear-gradient(160deg, #2b1b15 0%, var(--cocoa) 52%, #241711 100%);
   opacity: 1;
   transition:
-    opacity 520ms cubic-bezier(0.7, 0, 0.84, 0),
-    filter 520ms ease,
-    transform 620ms cubic-bezier(0.7, 0, 0.84, 0);
+    opacity 650ms cubic-bezier(0.7, 0, 0.84, 0),
+    filter 650ms ease,
+    transform 760ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 .intro-screen::after {
@@ -780,6 +780,7 @@ body.intro-active .game-shell {
   color: var(--cream);
   background: rgb(92 61 48 / 98%);
   box-shadow: 0 26px 44px rgb(0 0 0 / 30%);
+  animation: account-card-enter 680ms cubic-bezier(0.12, 1.14, 0.24, 1) both;
 }
 
 .account-card h2 {
@@ -881,6 +882,15 @@ body.intro-active .game-shell {
   letter-spacing: 0.08em;
 }
 
+.hud span {
+  display: inline-block;
+  transform-origin: center;
+}
+
+.hud .hud-bump {
+  animation: hud-number-bump 420ms cubic-bezier(0.12, 1.3, 0.22, 1);
+}
+
 .title-block {
   margin-top: 40px;
   text-align: center;
@@ -903,6 +913,7 @@ h1 {
 }
 
 .matrix-stage {
+  isolation: isolate;
   position: relative;
   min-height: 232px;
   margin-top: 36px;
@@ -913,6 +924,35 @@ h1 {
   box-shadow:
     0 5px 0 rgb(0 0 0 / 14%),
     0 28px 28px -30px rgb(224 158 92 / 60%);
+  transition:
+    border-color 260ms ease,
+    box-shadow 300ms ease,
+    transform 300ms cubic-bezier(0.12, 1.12, 0.24, 1);
+}
+
+.matrix-stage::after {
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border: 1px solid var(--accent);
+  border-radius: inherit;
+  box-shadow: 0 0 28px rgb(224 158 92 / 28%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96);
+}
+
+.matrix-stage.operation-impact::after {
+  animation: gameplay-stage-impact 560ms cubic-bezier(0.12, 1.1, 0.24, 1);
+}
+
+.matrix-stage.swap-impact {
+  animation: gameplay-swap-stage 600ms cubic-bezier(0.12, 1.15, 0.24, 1);
+}
+
+.matrix-stage.reset-impact {
+  animation: gameplay-reset-stage 680ms cubic-bezier(0.12, 1.12, 0.24, 1);
 }
 
 .matrix {
@@ -921,6 +961,7 @@ h1 {
 }
 
 .matrix-row {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   height: 54px;
@@ -932,14 +973,42 @@ h1 {
   color: var(--cream);
   background: var(--panel-raised);
   transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 220ms ease,
+    filter 220ms ease,
+    transform 220ms cubic-bezier(0.12, 1.16, 0.24, 1);
 }
 
 .matrix-row.selected {
   border-color: var(--accent);
   background: rgb(224 158 92 / 42%);
+  box-shadow:
+    0 0 0 1px rgb(224 158 92 / 24%),
+    0 10px 24px rgb(28 17 13 / 24%),
+    inset 0 0 18px rgb(224 158 92 / 12%);
+  animation: gameplay-row-selected 430ms cubic-bezier(0.12, 1.3, 0.22, 1);
+  transform: scale(1.018);
+}
+
+.matrix-row.selected .matrix-value {
+  animation: gameplay-selected-value 520ms cubic-bezier(0.12, 1.25, 0.24, 1) both;
+}
+
+.matrix-row.selected .matrix-value:nth-child(2) { animation-delay: 32ms; }
+.matrix-row.selected .matrix-value:nth-child(3) { animation-delay: 64ms; }
+.matrix-row.selected .matrix-value:nth-child(4) { animation-delay: 96ms; }
+
+.matrix-row.operation-source {
+  animation: gameplay-source-charge 520ms cubic-bezier(0.12, 1.2, 0.24, 1);
+}
+
+.matrix-row.operation-target {
+  animation: gameplay-target-receive 580ms cubic-bezier(0.12, 1.24, 0.24, 1);
+}
+
+.matrix-row.operation-scale {
+  animation: gameplay-row-scale 560ms cubic-bezier(0.12, 1.28, 0.22, 1);
 }
 
 .matrix-row.slot-active {
@@ -961,6 +1030,7 @@ h1 {
   font-size: 17px;
   font-weight: 600;
   line-height: 1;
+  transform-origin: center;
 }
 
 .matrix-value:last-child {
@@ -1007,6 +1077,49 @@ h1 {
   clip-path: polygon(50% 0%, 59% 41%, 100% 50%, 59% 59%, 50% 100%, 41% 59%, 0% 50%, 41% 41%);
   animation: sparkle-burst 1.24s ease-out var(--sparkle-delay) forwards;
 }
+
+.row-transfer-tracer {
+  position: absolute;
+  z-index: 6;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow:
+    0 0 0 5px rgb(199 209 140 / 13%),
+    0 0 18px 5px rgb(199 209 140 / 60%);
+  pointer-events: none;
+  transform: translateY(0);
+}
+
+.gameplay-entering .hud {
+  animation: gameplay-hud-enter 520ms cubic-bezier(0.12, 1.12, 0.24, 1) both;
+}
+
+.gameplay-entering .title-block {
+  animation: gameplay-title-enter 600ms cubic-bezier(0.12, 1.2, 0.24, 1) 45ms both;
+}
+
+.gameplay-entering .matrix-stage {
+  animation: gameplay-matrix-enter 690ms cubic-bezier(0.08, 1.22, 0.2, 1) 90ms both;
+}
+
+.gameplay-entering .control-card {
+  animation: gameplay-controls-enter 620ms cubic-bezier(0.12, 1.16, 0.24, 1) 145ms both;
+}
+
+.gameplay-entering[data-entry-kind="reset"] .hud,
+.gameplay-entering[data-entry-kind="reset"] .title-block,
+.gameplay-entering[data-entry-kind="reset"] .control-card {
+  animation: none;
+}
+
+.gameplay-entering[data-entry-kind="reset"] .matrix-row {
+  animation: gameplay-reset-row 520ms cubic-bezier(0.12, 1.25, 0.22, 1) both;
+}
+
+.gameplay-entering[data-entry-kind="reset"] .matrix-row:nth-child(2) { animation-delay: 55ms; }
+.gameplay-entering[data-entry-kind="reset"] .matrix-row:nth-child(3) { animation-delay: 110ms; }
 
 .control-card {
   margin-top: 42px;
@@ -1370,11 +1483,28 @@ h1 {
 .operation-button {
   min-height: 34px;
   font-size: 12px;
+  transition:
+    background-color 180ms ease,
+    box-shadow 220ms ease,
+    color 180ms ease,
+    transform 220ms cubic-bezier(0.12, 1.2, 0.24, 1);
 }
 
 .operation-button.active {
   color: var(--cocoa);
   background: var(--accent);
+  box-shadow:
+    0 5px 14px rgb(28 17 13 / 18%),
+    inset 0 -2px 0 rgb(74 48 38 / 18%);
+  transform: translateY(-1px);
+}
+
+.operation-button.mode-activated {
+  animation: gameplay-mode-activated 420ms cubic-bezier(0.12, 1.3, 0.22, 1);
+}
+
+.operation-button:active {
+  transform: translateY(1px) scale(0.96);
 }
 
 .factor-line {
@@ -1397,6 +1527,10 @@ h1 {
 .factor-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgb(224 158 92 / 22%);
+}
+
+.factor-input.factor-accepted {
+  animation: gameplay-factor-accepted 400ms cubic-bezier(0.12, 1.26, 0.22, 1);
 }
 
 .factor-input.invalid {
@@ -1426,6 +1560,16 @@ h1 {
   font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.08em;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.reset-button:active {
+  border-color: var(--accent);
+  color: var(--cream);
+  transform: rotate(-7deg) scale(0.9);
 }
 
 .settings-button {
@@ -1481,6 +1625,11 @@ h1 {
   box-shadow: 0 18px 38px rgb(0 0 0 / 30%);
 }
 
+.settings-menu:not([hidden]) {
+  animation: gameplay-menu-enter 320ms cubic-bezier(0.12, 1.2, 0.24, 1) both;
+  transform-origin: bottom left;
+}
+
 .settings-action,
 .logout-button {
   width: 100%;
@@ -1532,6 +1681,118 @@ h1 {
 .game-shell.celebrating .play-view button,
 .game-shell.celebrating .play-view input {
   pointer-events: none;
+}
+
+@keyframes account-card-enter {
+  0% { opacity: 0; filter: blur(8px); transform: translateY(22px) scale(0.92); }
+  66% { opacity: 1; filter: blur(0); transform: translateY(-4px) scale(1.025); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-hud-enter {
+  0% { opacity: 0; transform: translateY(-14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gameplay-title-enter {
+  0% { opacity: 0; filter: blur(6px); transform: translateY(-8px) scale(0.94); }
+  70% { opacity: 1; filter: blur(0); transform: translateY(2px) scale(1.025); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-matrix-enter {
+  0% { opacity: 0; filter: blur(10px); transform: translateY(22px) scale(0.88); }
+  62% { opacity: 1; filter: blur(0); transform: translateY(-5px) scale(1.035); }
+  82% { transform: translateY(2px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-controls-enter {
+  0% { opacity: 0; transform: translateY(24px) scale(0.96); }
+  72% { opacity: 1; transform: translateY(-3px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-reset-row {
+  0% { opacity: 0; filter: blur(6px); transform: translateX(28px) rotateY(-18deg) scale(0.94); }
+  68% { opacity: 1; filter: blur(0); transform: translateX(-5px) rotateY(3deg) scale(1.02); }
+  100% { opacity: 1; transform: translateX(0) rotateY(0) scale(1); }
+}
+
+@keyframes gameplay-stage-impact {
+  0% { opacity: 0; transform: scale(0.96); }
+  26% { opacity: 0.75; transform: scale(1.025); }
+  100% { opacity: 0; transform: scale(1.055); }
+}
+
+@keyframes gameplay-swap-stage {
+  0% { border-color: rgb(163 110 79 / 78%); transform: scale(1); }
+  30% { border-color: var(--success); transform: scale(0.985) rotate(-0.35deg); }
+  62% { border-color: var(--accent); transform: scale(1.015) rotate(0.25deg); }
+  100% { border-color: rgb(163 110 79 / 78%); transform: scale(1); }
+}
+
+@keyframes gameplay-reset-stage {
+  0% { filter: saturate(0.5); transform: scale(0.98); }
+  35% { filter: saturate(1.4) brightness(1.15); transform: scale(1.018); }
+  100% { filter: saturate(1) brightness(1); transform: scale(1); }
+}
+
+@keyframes gameplay-row-selected {
+  0% { box-shadow: 0 0 0 0 rgb(224 158 92 / 0%); transform: scale(1); }
+  48% { box-shadow: 0 0 0 6px rgb(224 158 92 / 16%); transform: scale(1.03); }
+  100% { transform: scale(1.018); }
+}
+
+@keyframes gameplay-selected-value {
+  0% { color: var(--cream); transform: translateY(0) scale(1); }
+  42% { color: white; transform: translateY(-3px) scale(1.16); }
+  100% { color: var(--cream); transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-source-charge {
+  0% { border-color: rgb(163 110 79 / 72%); filter: brightness(1); transform: scale(1); }
+  28% { border-color: var(--success); filter: brightness(1.3); transform: scale(1.035); }
+  62% { filter: brightness(0.92); transform: scale(0.985); }
+  100% { border-color: rgb(163 110 79 / 72%); filter: brightness(1); transform: scale(1); }
+}
+
+@keyframes gameplay-target-receive {
+  0%, 28% { box-shadow: 0 0 0 0 rgb(199 209 140 / 0%); transform: scale(1); }
+  54% { border-color: var(--success); box-shadow: 0 0 0 7px rgb(199 209 140 / 15%); transform: scale(1.045); }
+  76% { transform: scale(0.985); }
+  100% { box-shadow: 0 0 0 12px rgb(199 209 140 / 0%); transform: scale(1); }
+}
+
+@keyframes gameplay-row-scale {
+  0% { filter: brightness(1); transform: scaleX(1); }
+  24% { border-color: var(--success); filter: brightness(1.32); transform: scaleX(0.92) scaleY(1.06); }
+  58% { transform: scaleX(1.045) scaleY(0.98); }
+  100% { filter: brightness(1); transform: scale(1); }
+}
+
+@keyframes hud-number-bump {
+  0% { color: var(--cream); transform: translateY(0) scale(1); }
+  42% { color: var(--success); text-shadow: 0 0 14px rgb(199 209 140 / 48%); transform: translateY(-4px) scale(1.18); }
+  100% { color: var(--cream); text-shadow: none; transform: translateY(0) scale(1); }
+}
+
+@keyframes gameplay-mode-activated {
+  0% { transform: scale(0.9); }
+  48% { box-shadow: 0 0 0 5px rgb(224 158 92 / 16%); transform: translateY(-2px) scale(1.08); }
+  100% { transform: translateY(-1px) scale(1); }
+}
+
+@keyframes gameplay-factor-accepted {
+  0% { transform: scale(1); }
+  45% { border-color: var(--success); box-shadow: 0 0 0 4px rgb(199 209 140 / 15%); color: var(--success); transform: scale(1.055); }
+  100% { transform: scale(1); }
+}
+
+@keyframes gameplay-menu-enter {
+  0% { opacity: 0; filter: blur(5px); transform: translateY(9px) scale(0.88); }
+  70% { opacity: 1; filter: blur(0); transform: translateY(-2px) scale(1.025); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes slot-card-pulse {
