@@ -187,12 +187,19 @@ function playerSessionExpired(player: PlayerRow, now = Date.now()) {
   return now - playerLastActiveAt(player) >= SESSION_IDLE_MS;
 }
 
+function playerSessionReleased(player: PlayerRow) {
+  return player.token_hash.startsWith("ended:");
+}
+
+function playerSessionActive(player: PlayerRow, now = Date.now()) {
+  return !playerSessionReleased(player) && !playerSessionExpired(player, now);
+}
+
 async function releasePlayerSession(player: PlayerRow) {
   const releasedKey = `ended:${player.id}`;
   const { error } = await supabase
     .from("row_echelon_players")
     .update({
-      name_key: releasedKey,
       token_hash: releasedKey,
     })
     .eq("id", player.id)
@@ -336,12 +343,36 @@ async function createAccount(request: Request) {
     .maybeSingle();
 
   if (existingError) throw existingError;
-  if (existing && playerSessionExpired(existing as PlayerRow)) {
-    await releasePlayerSession(existing as PlayerRow);
+  if (existing && playerSessionActive(existing as PlayerRow)) {
+    throw new HttpError(409, "Username is taken.");
   }
 
   const token = randomToken();
   const tokenHash = await sha256Hex(token);
+  const lastActiveAt = new Date().toISOString();
+
+  if (existing) {
+    const existingPlayer = existing as PlayerRow;
+    const { data: claimed, error: claimError } = await supabase
+      .from("row_echelon_players")
+      .update({
+        token_hash: tokenHash,
+        last_active_at: lastActiveAt,
+      })
+      .eq("id", existingPlayer.id)
+      .eq("token_hash", existingPlayer.token_hash)
+      .select("id,name,created_at,token_hash,last_active_at")
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+    if (!claimed) throw new HttpError(409, "Username is taken.");
+
+    return json({
+      player: publicPlayer(claimed as PlayerRow),
+      token,
+      resumed: true,
+    });
+  }
 
   const { data, error } = await supabase
     .from("row_echelon_players")
@@ -349,7 +380,7 @@ async function createAccount(request: Request) {
       name,
       name_key: nameKey,
       token_hash: tokenHash,
-      last_active_at: new Date().toISOString(),
+      last_active_at: lastActiveAt,
     })
     .select("id,name,created_at")
     .single();
@@ -364,6 +395,7 @@ async function createAccount(request: Request) {
   return json({
     player: publicPlayer(data as PlayerRow),
     token,
+    resumed: false,
   }, 201);
 }
 

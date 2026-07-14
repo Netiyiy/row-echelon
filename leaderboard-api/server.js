@@ -137,9 +137,66 @@ function playerSessionExpired(player, now = Date.now()) {
   return now - playerLastActiveAt(player) >= SESSION_IDLE_MS;
 }
 
+function playerSessionReleased(player) {
+  return Boolean(player.sessionEndedAt) || String(player.tokenHash || "").startsWith("ended:");
+}
+
 function releasePlayerSession(player) {
   player.tokenHash = `ended:${player.id}`;
   player.sessionEndedAt = Date.now();
+}
+
+function mergeDailyScore(target, source) {
+  target.solved = (Number(target.solved) || 0) + (Number(source.solved) || 0);
+  target.totalScore = (Number(target.totalScore) || 0) + (Number(source.totalScore) || 0);
+  target.totalSteps = (Number(target.totalSteps) || 0) + (Number(source.totalSteps) || 0);
+  target.totalTime = (Number(target.totalTime) || 0) + (Number(source.totalTime) || 0);
+  const bestSteps = [target.bestSteps, source.bestSteps]
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  target.bestSteps = bestSteps.length ? Math.min(...bestSteps) : null;
+  target.bestLevel = Math.max(Number(target.bestLevel) || 0, Number(source.bestLevel) || 0);
+  if ((Number(source.updatedAt) || 0) >= (Number(target.updatedAt) || 0)) {
+    target.lastLevel = Number(source.lastLevel) || 0;
+  }
+  target.updatedAt = Math.max(Number(target.updatedAt) || 0, Number(source.updatedAt) || 0);
+}
+
+function consolidateUsernameProfiles(db, name, now = Date.now()) {
+  const nameKey = name.toLowerCase();
+  const matches = db.players.filter((player) => player.name.toLowerCase() === nameKey);
+  if (!matches.length) return null;
+
+  matches.forEach((player) => {
+    if (!playerSessionReleased(player) && playerSessionExpired(player, now)) {
+      releasePlayerSession(player);
+    }
+  });
+
+  matches.sort((left, right) => {
+    const leftActive = playerSessionReleased(left) ? 1 : 0;
+    const rightActive = playerSessionReleased(right) ? 1 : 0;
+    return leftActive - rightActive
+      || Number(left.createdAt) - Number(right.createdAt)
+      || String(left.id).localeCompare(String(right.id));
+  });
+  const canonical = matches[0];
+  const duplicateIds = new Set(matches.slice(1).map((player) => player.id));
+
+  [...db.dailyScores].forEach((score) => {
+    if (!duplicateIds.has(score.playerId)) return;
+    const target = db.dailyScores.find((candidate) =>
+      candidate.playerId === canonical.id && candidate.date === score.date,
+    );
+    if (target) {
+      mergeDailyScore(target, score);
+      db.dailyScores.splice(db.dailyScores.indexOf(score), 1);
+    } else {
+      score.playerId = canonical.id;
+    }
+  });
+  db.players = db.players.filter((player) => !duplicateIds.has(player.id));
+  return canonical;
 }
 
 function requirePlayer(db, request) {
@@ -249,15 +306,25 @@ async function createAccount(request) {
   validateName(name);
 
   return updateDb(async (db) => {
-    db.players
-      .filter((player) => !player.sessionEndedAt && playerSessionExpired(player))
-      .forEach(releasePlayerSession);
-    const taken = db.players.some((player) =>
-      !player.sessionEndedAt && player.name.toLowerCase() === name.toLowerCase(),
-    );
-    if (taken) throw new HttpError(409, "Username is taken.");
+    const existing = consolidateUsernameProfiles(db, name);
+    if (existing && !playerSessionReleased(existing)) {
+      const error = new HttpError(409, "Username is taken.");
+      error.persistDb = true;
+      throw error;
+    }
 
     const token = crypto.randomBytes(32).toString("base64url");
+    if (existing) {
+      existing.tokenHash = tokenHash(token);
+      existing.lastActiveAt = Date.now();
+      delete existing.sessionEndedAt;
+      return {
+        player: publicPlayer(existing),
+        token,
+        resumed: true,
+      };
+    }
+
     const player = {
       id: crypto.randomUUID(),
       name,
@@ -269,6 +336,7 @@ async function createAccount(request) {
     return {
       player: publicPlayer(player),
       token,
+      resumed: false,
     };
   });
 }

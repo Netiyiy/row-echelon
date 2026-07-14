@@ -137,6 +137,9 @@ const SCORING = Object.freeze({
 });
 const SUPABASE_API_BASE_URL =
   "https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api";
+const SUSPEND_AUDIO_WHEN_HIDDEN = navigator.userAgentData?.mobile === true
+  || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+  || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
 function configuredApiBaseUrl() {
   const queryApi = new URLSearchParams(window.location.search).get("api");
@@ -2028,7 +2031,7 @@ async function createAccount() {
   }
 
   $("#create-account-button").disabled = true;
-  state.accountMessage = "Creating player...";
+  state.accountMessage = "Opening player...";
   renderAccount();
   try {
     const session = await apiRequest("/api/accounts", {
@@ -2037,7 +2040,9 @@ async function createAccount() {
     });
     savePlayerSession(session);
     state.accountMessage = "";
-    state.leaderboardMessage = "Account ready. Solve levels to climb.";
+    state.leaderboardMessage = session.resumed
+      ? `Welcome back, ${session.player.name}. Your previous points are restored.`
+      : "Account ready. Solve levels to climb.";
     input.value = "";
     startLevel(state.level);
     await refreshLeaderboard();
@@ -2479,7 +2484,7 @@ document.addEventListener("pointerdown", () => {
 document.addEventListener("keydown", recordPlayerActivity);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    audio.suspend();
+    if (SUSPEND_AUDIO_WHEN_HIDDEN) audio.suspend();
     pauseLevelTimer();
     return;
   }
