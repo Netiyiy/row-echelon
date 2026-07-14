@@ -35,6 +35,9 @@ struct GameWebView: UIViewRepresentable {
         webView.scrollView.backgroundColor = webView.backgroundColor
         webView.scrollView.bounces = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.minimumZoomScale = 1
+        webView.scrollView.maximumZoomScale = 1
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.allowsBackForwardNavigationGestures = false
         #if DEBUG
         webView.isInspectable = true
