@@ -187,6 +187,7 @@ class GameAudio {
   constructor() {
     this.backgroundVolume = 0.3;
     this.introTargetPeak = 0.095;
+    this.introCueMultipliers = { click: 2, finish: 4 };
     this.duckedBackgroundVolume = 0.1;
     this.background = new Audio("assets/audio/row_echelon_music.mp3");
     this.background.loop = true;
@@ -300,7 +301,8 @@ class GameAudio {
       highPass.type = "highpass";
       highPass.frequency.value = 450;
       highPass.Q.value = 0.7;
-      const normalizedGain = this.introGains.get(cue) || 1;
+      const normalizedGain = (this.introGains.get(cue) || 1)
+        * (this.introCueMultipliers[cue] || 1);
       const now = this.introContext.currentTime;
       const releaseStart = now + Math.max(0.004, buffer.duration - 0.007);
       gain.gain.setValueAtTime(0, now);
