@@ -36,6 +36,7 @@ function publicPlayer(player) {
     id: player.id,
     name: player.name,
     createdAt: player.createdAt,
+    totalSolved: Number(player.totalSolved) || 0,
   };
 }
 
@@ -54,10 +55,17 @@ async function readDb() {
   try {
     const raw = await fs.readFile(DATA_FILE, "utf8");
     const db = JSON.parse(raw);
-    return {
-      players: Array.isArray(db.players) ? db.players : [],
-      dailyScores: Array.isArray(db.dailyScores) ? db.dailyScores : [],
-    };
+    const players = Array.isArray(db.players) ? db.players : [];
+    const dailyScores = Array.isArray(db.dailyScores) ? db.dailyScores : [];
+
+    players.forEach((player) => {
+      if (Number.isFinite(Number(player.totalSolved))) return;
+      player.totalSolved = dailyScores
+        .filter((score) => score.playerId === player.id)
+        .reduce((sum, score) => sum + (Number(score.solved) || 0), 0);
+    });
+
+    return { players, dailyScores };
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     return { players: [], dailyScores: [] };
@@ -161,6 +169,10 @@ function consolidateUsernameProfiles(db, name, now = Date.now()) {
   });
   const canonical = matches[0];
   const duplicateIds = new Set(matches.slice(1).map((player) => player.id));
+  canonical.totalSolved = matches.reduce(
+    (sum, player) => sum + (Number(player.totalSolved) || 0),
+    0,
+  );
 
   [...db.dailyScores].forEach((score) => {
     if (!duplicateIds.has(score.playerId)) return;
@@ -213,11 +225,15 @@ function calculateScore({ level, steps, timeSeconds }) {
 function rankedEntries(db, date, currentPlayerId = null) {
   const byPlayer = new Map(db.players.map((player) => [player.id, player]));
   return db.dailyScores
-    .filter((score) => score.date === date && byPlayer.has(score.playerId))
+    .filter((score) =>
+      score.date === date
+      && byPlayer.has(score.playerId)
+      && (Number(score.totalScore) || 0) > 0,
+    )
     .map((score) => ({
       playerId: score.playerId,
       name: byPlayer.get(score.playerId).name,
-      solved: Number(score.solved) || 0,
+      solved: Number(byPlayer.get(score.playerId).totalSolved) || 0,
       totalScore: Number(score.totalScore) || 0,
       totalSteps: Number(score.totalSteps) || 0,
       totalTime: Number(score.totalTime) || 0,
@@ -310,6 +326,7 @@ async function createAccount(request) {
       tokenHash: tokenHash(token),
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
+      totalSolved: 0,
     };
     db.players.push(player);
     return {
@@ -387,6 +404,7 @@ async function completeLevel(request) {
     }
 
     score.solved = (Number(score.solved) || 0) + 1;
+    player.totalSolved = (Number(player.totalSolved) || 0) + 1;
     score.totalScore = (Number(score.totalScore) || 0) + scoreBreakdown.score;
     score.totalSteps = (Number(score.totalSteps) || 0) + steps;
     score.totalTime = (Number(score.totalTime) || 0) + scoreBreakdown.timeSeconds;

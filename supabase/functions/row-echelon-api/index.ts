@@ -70,6 +70,12 @@ type PlayerRow = {
   created_at: string;
   token_hash: string;
   last_active_at: string;
+  total_solved: number;
+};
+
+type LeaderboardPlayer = {
+  name: string;
+  totalSolved: number;
 };
 
 type DailyScoreRow = {
@@ -101,6 +107,7 @@ function publicPlayer(player: PlayerRow) {
     id: player.id,
     name: player.name,
     createdAt: Date.parse(player.created_at),
+    totalSolved: Number(player.total_solved) || 0,
   };
 }
 
@@ -237,7 +244,7 @@ async function requirePlayer(request: Request) {
   const tokenHash = await sha256Hex(token);
   const { data, error } = await supabase
     .from("row_echelon_players")
-    .select("id,name,created_at,token_hash,last_active_at")
+    .select("id,name,created_at,token_hash,last_active_at,total_solved")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -262,14 +269,14 @@ async function requirePlayer(request: Request) {
 
 function rankRows(
   rows: DailyScoreRow[],
-  playersById: Map<string, string>,
+  playersById: Map<string, LeaderboardPlayer>,
   currentPlayerId: string | null,
 ) {
   return rows
     .map((row) => ({
       playerId: row.player_id,
-      name: playersById.get(row.player_id) || "Player",
-      solved: Number(row.solved) || 0,
+      name: playersById.get(row.player_id)?.name || "Player",
+      solved: playersById.get(row.player_id)?.totalSolved || 0,
       totalScore: Number(row.total_score) || 0,
       totalSteps: Number(row.total_steps) || 0,
       totalTime: Number(row.total_time) || 0,
@@ -311,23 +318,27 @@ async function leaderboardPayload({
       last_level,
       updated_at
     `)
-    .eq("score_date", date);
+    .eq("score_date", date)
+    .gt("total_score", 0);
 
   if (error) throw error;
 
   const rows = (data || []) as DailyScoreRow[];
   const playerIds = [...new Set(rows.map((row) => row.player_id))];
-  const playersById = new Map<string, string>();
+  const playersById = new Map<string, LeaderboardPlayer>();
 
   if (playerIds.length) {
     const { data: players, error: playersError } = await supabase
       .from("row_echelon_players")
-      .select("id,name")
+      .select("id,name,total_solved")
       .in("id", playerIds);
 
     if (playersError) throw playersError;
     for (const player of players || []) {
-      playersById.set(player.id, player.name);
+      playersById.set(player.id, {
+        name: player.name,
+        totalSolved: Number(player.total_solved) || 0,
+      });
     }
   }
 
@@ -360,7 +371,7 @@ async function createAccount(request: Request) {
   const nameKey = name.toLowerCase();
   const { data: existing, error: existingError } = await supabase
     .from("row_echelon_players")
-    .select("id,name,created_at,token_hash,last_active_at")
+    .select("id,name,created_at,token_hash,last_active_at,total_solved")
     .eq("name_key", nameKey)
     .maybeSingle();
 
@@ -383,7 +394,7 @@ async function createAccount(request: Request) {
       })
       .eq("id", existingPlayer.id)
       .eq("token_hash", existingPlayer.token_hash)
-      .select("id,name,created_at,token_hash,last_active_at")
+      .select("id,name,created_at,token_hash,last_active_at,total_solved")
       .maybeSingle();
 
     if (claimError) throw claimError;
@@ -404,7 +415,7 @@ async function createAccount(request: Request) {
       token_hash: tokenHash,
       last_active_at: lastActiveAt,
     })
-    .select("id,name,created_at")
+    .select("id,name,created_at,total_solved")
     .single();
 
   if (error) {
