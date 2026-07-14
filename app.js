@@ -188,16 +188,22 @@ class GameAudio {
     this.background.loop = true;
     this.background.preload = "auto";
     this.background.volume = this.backgroundVolume;
+    this.introPreloads = Array.from({ length: 8 }, (_, index) => {
+      const player = new Audio(`assets/audio/intro/intro_click_${index + 1}.mp3`);
+      player.preload = "auto";
+      return player;
+    });
     this.effects = new Set();
     this.fadeFrame = null;
     this.restoreTimer = null;
     this.enabled = localStorage.getItem(SOUND_KEY) !== "false";
     this.userActivated = false;
     this.suspended = document.hidden;
+    this.introMode = false;
   }
 
   startMusic() {
-    if (!this.enabled || !this.userActivated || this.suspended || document.hidden) return;
+    if (this.introMode || !this.enabled || !this.userActivated || this.suspended || document.hidden) return;
     if (!this.background.paused) return;
     this.background.muted = false;
     this.background.play()
@@ -233,6 +239,38 @@ class GameAudio {
       this.duckMusic();
     }
     player.play().catch(cleanup);
+  }
+
+  playIntro(index, volume = 0.58) {
+    if (!this.enabled || this.suspended || document.hidden) return;
+    const player = new Audio(`assets/audio/intro/intro_click_${index}.mp3`);
+    player.volume = volume;
+    this.effects.add(player);
+    const cleanup = () => this.effects.delete(player);
+    player.addEventListener("ended", cleanup, { once: true });
+    player.addEventListener("error", cleanup, { once: true });
+    player.play().catch(cleanup);
+  }
+
+  enterIntro() {
+    this.introMode = true;
+    this.introPreloads.forEach((player) => player.load());
+    window.clearTimeout(this.restoreTimer);
+    this.restoreTimer = null;
+    if (this.fadeFrame) {
+      window.cancelAnimationFrame(this.fadeFrame);
+      this.fadeFrame = null;
+    }
+    this.background.pause();
+    this.background.muted = true;
+    this.updateMediaSession("paused");
+  }
+
+  exitIntro() {
+    this.introMode = false;
+    this.background.volume = this.backgroundVolume;
+    this.background.muted = false;
+    this.startMusic();
   }
 
   duckMusic() {
@@ -1707,78 +1745,8 @@ async function createAccount() {
   }
 }
 
-let introAudioContext = null;
-
 function introReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function prepareIntroAudio() {
-  if (!audio.enabled || document.hidden) return null;
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return null;
-
-  if (!introAudioContext || introAudioContext.state === "closed") {
-    introAudioContext = new AudioContext();
-  }
-  if (introAudioContext.state === "suspended") {
-    introAudioContext.resume().catch(() => {});
-  }
-  return introAudioContext;
-}
-
-function playIntroTone({
-  frequency = 220,
-  endFrequency = frequency,
-  duration = 0.12,
-  delay = 0,
-  gain = 0.035,
-  type = "sine",
-} = {}) {
-  const context = prepareIntroAudio();
-  if (!context || context.state === "closed") return;
-
-  const startedAt = context.currentTime + delay;
-  const oscillator = context.createOscillator();
-  const volume = context.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, startedAt);
-  oscillator.frequency.exponentialRampToValueAtTime(
-    Math.max(1, endFrequency),
-    startedAt + duration,
-  );
-  volume.gain.setValueAtTime(0.0001, startedAt);
-  volume.gain.exponentialRampToValueAtTime(gain, startedAt + Math.min(0.025, duration / 3));
-  volume.gain.exponentialRampToValueAtTime(0.0001, startedAt + duration);
-  oscillator.connect(volume).connect(context.destination);
-  oscillator.start(startedAt);
-  oscillator.stop(startedAt + duration + 0.02);
-}
-
-function playIntroFinalClick() {
-  playIntroTone({
-    frequency: 155,
-    endFrequency: 62,
-    duration: 0.16,
-    gain: 0.075,
-    type: "triangle",
-  });
-  playIntroTone({
-    frequency: 1680,
-    endFrequency: 560,
-    duration: 0.055,
-    delay: 0.018,
-    gain: 0.045,
-    type: "square",
-  });
-  playIntroTone({
-    frequency: 620,
-    endFrequency: 410,
-    duration: 0.21,
-    delay: 0.035,
-    gain: 0.024,
-    type: "sine",
-  });
 }
 
 function resetIntroDom() {
@@ -1868,6 +1836,7 @@ async function flyIntroToken(source, target, {
 async function formIntroMatrix(token) {
   const screen = $("#intro-screen");
   screen.classList.add("matrix-forming");
+  audio.playIntro(3, 0.56);
   $("#intro-matrix").setAttribute("aria-hidden", "false");
   await introDelay(60, token);
   if (token !== state.introToken) return false;
@@ -1911,7 +1880,7 @@ async function formIntroMatrix(token) {
   screen.classList.add("matrix-ready");
   $$(".intro-matrix-cell").forEach((cell) => cell.classList.add("landed"));
   $$(".intro-title-letter").forEach((letter) => letter.classList.add("landed"));
-  playIntroTone({ frequency: 280, endFrequency: 420, duration: 0.18, gain: 0.025 });
+  audio.playIntro(7, 0.42);
   return true;
 }
 
@@ -1926,6 +1895,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
   screen.classList.remove("matrix-impact");
   void screen.offsetWidth;
   screen.classList.add("matrix-impact");
+  audio.playIntro(4 + (stepIndex % 4), 0.5);
 
   const changes = [];
   step.values.forEach((row, rowIndex) => {
@@ -1971,13 +1941,6 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
   }));
 
   if (token !== state.introToken) return false;
-  playIntroTone({
-    frequency: 185 + stepIndex * 42,
-    endFrequency: 255 + stepIndex * 48,
-    duration: 0.11,
-    gain: 0.025,
-    type: stepIndex % 2 ? "triangle" : "sine",
-  });
   return true;
 }
 
@@ -2000,12 +1963,7 @@ async function launchIntroSolutions(token) {
     if (token !== state.introToken) return false;
     target.dataset.solutionValue = solution.value;
     target.classList.add("solution-landed");
-    playIntroTone({
-      frequency: 420 + index * 140,
-      endFrequency: 560 + index * 160,
-      duration: 0.14,
-      gain: 0.035,
-    });
+    audio.playIntro(6 + index, 0.54 + index * 0.06);
     if (!(await introDelay(150, token))) return false;
   }
   return true;
@@ -2022,10 +1980,7 @@ async function finishIntro({ skipped = false, token = state.introToken } = {}) {
   if (token !== state.introToken) return;
   $("#intro-screen").hidden = true;
   resetIntroDom();
-  if (introAudioContext && introAudioContext.state !== "closed") {
-    introAudioContext.close().catch(() => {});
-  }
-  introAudioContext = null;
+  audio.exitIntro();
   resumeLevelTimer();
 }
 
@@ -2035,13 +1990,12 @@ async function runIntroAnimation() {
   const token = state.introToken;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
-  prepareIntroAudio();
-  playIntroTone({ frequency: 145, endFrequency: 235, duration: 0.42, gain: 0.035 });
+  audio.playIntro(1, 0.62);
 
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
-  playIntroTone({ frequency: 260, endFrequency: 390, duration: 0.22, gain: 0.028 });
+  audio.playIntro(2, 0.54);
 
   if (!(await introDelay(2100, token))) return;
   if (!(await formIntroMatrix(token))) return;
@@ -2062,7 +2016,8 @@ async function runIntroAnimation() {
   screen.classList.remove("matrix-impact");
   screen.classList.add("rref-complete");
   $("#intro-operation").textContent = "REDUCED ROW ECHELON FORM";
-  playIntroFinalClick();
+  audio.playIntro(8, 0.74);
+  window.setTimeout(() => audio.playIntro(3, 0.34), 55);
   if (!(await introDelay(2100, token))) return;
   await finishIntro({ token });
 }
@@ -2071,6 +2026,7 @@ function showIntro({ autoplay = false } = {}) {
   state.introToken += 1;
   state.introVisible = true;
   state.introRunning = false;
+  audio.enterIntro();
   pauseLevelTimer();
   resetIntroDom();
   $("#intro-screen").hidden = false;
@@ -2114,14 +2070,12 @@ $("#replay-intro-button").addEventListener("click", () => {
   state.settingsOpen = false;
   renderSettings();
   audio.resumeFromUserGesture();
-  prepareIntroAudio();
   showIntro({ autoplay: true });
 });
 $("#logout-button").addEventListener("click", logoutPlayer);
 $("#intro-begin").addEventListener("click", (event) => {
   event.stopPropagation();
   audio.resumeFromUserGesture();
-  prepareIntroAudio();
   runIntroAnimation();
 });
 $("#intro-skip").addEventListener("click", (event) => {
@@ -2160,15 +2114,11 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("pointerdown", () => {
   audio.resumeFromUserGesture();
   recordPlayerActivity();
-  if (state.introVisible && state.introRunning) prepareIntroAudio();
 });
 document.addEventListener("keydown", recordPlayerActivity);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     audio.suspend();
-    if (introAudioContext?.state === "running") {
-      introAudioContext.suspend().catch(() => {});
-    }
     pauseLevelTimer();
     return;
   }
@@ -2177,9 +2127,6 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", () => {
   audio.suspend();
-  if (introAudioContext?.state === "running") {
-    introAudioContext.suspend().catch(() => {});
-  }
   pauseLevelTimer();
 });
 window.addEventListener("pageshow", () => {
@@ -2188,9 +2135,6 @@ window.addEventListener("pageshow", () => {
 });
 document.addEventListener("freeze", () => {
   audio.suspend();
-  if (introAudioContext?.state === "running") {
-    introAudioContext.suspend().catch(() => {});
-  }
   pauseLevelTimer();
 });
 

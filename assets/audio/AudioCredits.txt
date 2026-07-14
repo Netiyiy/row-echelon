@@ -15,6 +15,12 @@ Interface sound effects
 https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks
 Bundled files: ui_tap.wav, ui_row.wav, ui_apply.wav, ui_reset.wav
 
+Intro sound effects
+-------------------
+"UI Click Sounds (Sci Fi)" by EZduzziteh
+https://opengameart.org/content/ui-click-sounds-sci-fi
+Bundled files: intro/intro_click_1.mp3 through intro/intro_click_8.mp3
+
 Level completion sound
 ----------------------
 "Cozy Puzzle Jingle & Result" by MintoDog
