@@ -1796,7 +1796,7 @@ function createSolutionFlyer(source, className = "") {
 }
 
 async function dropSolutionVariable(source, target, index, token) {
-  const delay = index * 105;
+  const delay = index * 125;
   const { flyer, rect: sourceRect } = createSolutionFlyer(source, "variable");
   const targetRect = target.getBoundingClientRect();
   const deltaX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
@@ -1805,14 +1805,14 @@ async function dropSolutionVariable(source, target, index, token) {
 
   source.animate(
     [{ opacity: 1 }, { opacity: 0 }],
-    { duration: 90, delay, fill: "forwards", easing: "ease-in" },
+    { duration: 110, delay, fill: "forwards", easing: "ease-in" },
   );
   one.animate(
     [
       { opacity: 1, transform: "translateY(0) scale(1)" },
       { opacity: 0, transform: "translateY(12px) scale(0.42)" },
     ],
-    { duration: 160, delay: delay + 330, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+    { duration: 195, delay: delay + 400, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
   );
   const animation = flyer.animate(
     [
@@ -1826,7 +1826,7 @@ async function dropSolutionVariable(source, target, index, token) {
       { opacity: 1, transform: `translate(${deltaX}px, ${deltaY}px) scale(1)` },
     ],
     {
-      duration: 560,
+      duration: 680,
       delay,
       fill: "both",
       easing: "cubic-bezier(0.68, 0, 0.18, 1.18)",
@@ -1860,8 +1860,8 @@ async function morphSolutionToken(source, target, rowIndex, token) {
       { opacity: 0, filter: "blur(2px)", transform: `translate(${deltaX}px, ${deltaY}px) scale(0.72)` },
     ],
     {
-      duration: 540,
-      delay: rowIndex * 65,
+      duration: 650,
+      delay: rowIndex * 80,
       fill: "both",
       easing: "cubic-bezier(0.72, 0, 0.18, 1)",
     },
@@ -1893,17 +1893,17 @@ async function animateSolutionReveal(matrix, token) {
     return;
   }
 
-  await wait(390);
+  await wait(470);
   if (token !== state.celebrationToken) return;
   parts.reveal.classList.add("variables-visible");
-  await wait(360);
+  await wait(430);
   if (token !== state.celebrationToken) return;
 
   await Promise.all(parts.variableSources.map((source, index) =>
     dropSolutionVariable(source, parts.diagonalCells[index], index, token)));
   if (token !== state.celebrationToken) return;
   parts.reveal.classList.add("variables-landed");
-  await wait(300);
+  await wait(360);
   if (token !== state.celebrationToken) return;
 
   parts.reveal.classList.add("equations-forming");
@@ -1913,14 +1913,14 @@ async function animateSolutionReveal(matrix, token) {
         { opacity: 1, transform: "translateX(0) scaleY(1)" },
         { opacity: 0, transform: "translateX(-150px) rotate(-9deg) scaleY(0.7)" },
       ],
-      { duration: 520, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+      { duration: 630, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
     ),
     parts.rightBracket.animate(
       [
         { opacity: 1, transform: "translateX(0) scaleY(1)" },
         { opacity: 0, transform: "translateX(150px) rotate(9deg) scaleY(0.7)" },
       ],
-      { duration: 520, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+      { duration: 630, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
     ),
   ];
   parts.zeroCells.forEach((cell, index) => {
@@ -1929,7 +1929,7 @@ async function animateSolutionReveal(matrix, token) {
         { opacity: 1, filter: "blur(0)", transform: "scale(1)" },
         { opacity: 0, filter: "blur(5px)", transform: "scale(0.18)" },
       ],
-      { duration: 340, delay: index * 18, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
+      { duration: 410, delay: index * 22, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
     );
   });
   parts.grid.animate(
@@ -1937,7 +1937,7 @@ async function animateSolutionReveal(matrix, token) {
       { opacity: 1, transform: "scale(1)" },
       { opacity: 0.22, transform: "scale(0.72)" },
     ],
-    { duration: 650, fill: "forwards", easing: "cubic-bezier(0.65, 0, 0.2, 1)" },
+    { duration: 780, fill: "forwards", easing: "cubic-bezier(0.65, 0, 0.2, 1)" },
   );
 
   const morphs = [];
@@ -1948,7 +1948,7 @@ async function animateSolutionReveal(matrix, token) {
   await Promise.all([...bracketAnimations.map((animation) => animation.finished.catch(() => {})), ...morphs]);
   if (token !== state.celebrationToken) return;
   parts.reveal.classList.add("solution-final");
-  await wait(700);
+  await wait(1450);
 }
 
 function addCompletionSparkles() {
@@ -2086,6 +2086,42 @@ function resetIntroDom() {
     letter.removeAttribute("data-solution-value");
   });
   $$(".intro-flyer").forEach((flyer) => flyer.remove());
+  $("#intro-confetti")?.replaceChildren();
+}
+
+function launchIntroConfetti(token) {
+  const layer = $("#intro-confetti");
+  if (!layer) return;
+  layer.replaceChildren();
+  if (introReducedMotion()) return;
+
+  for (let index = 0; index < 58; index += 1) {
+    const piece = document.createElement("span");
+    piece.className = "intro-confetti-piece";
+    const angle = (-Math.PI * 0.92) + Math.random() * (Math.PI * 0.84);
+    const distance = randomInt(150, 410);
+    piece.style.setProperty("--intro-confetti-x", `${Math.cos(angle) * distance}px`);
+    piece.style.setProperty("--intro-confetti-y", `${Math.sin(angle) * distance + randomInt(150, 300)}px`);
+    piece.style.setProperty("--intro-confetti-rotate", `${randomInt(-540, 540)}deg`);
+    piece.style.setProperty("--intro-confetti-delay", `${Math.random() * 260}ms`);
+    piece.style.setProperty("--intro-confetti-width", `${randomInt(5, 10)}px`);
+    piece.style.setProperty("--intro-confetti-height", `${randomInt(8, 16)}px`);
+    piece.style.setProperty(
+      "--intro-confetti-color",
+      index % 4 === 0
+        ? "var(--success)"
+        : index % 3 === 0
+          ? "var(--accent)"
+          : index % 2 === 0
+            ? "var(--cream)"
+            : "var(--muted-cream)",
+    );
+    layer.append(piece);
+  }
+
+  window.setTimeout(() => {
+    if (token === state.introToken) layer.replaceChildren();
+  }, 2400);
 }
 
 function introDelay(duration, token) {
@@ -2384,7 +2420,9 @@ async function runIntroAnimation() {
     "buttonUp",
     token,
   );
-  if (!(await introDelay(2100, token))) return;
+  if (!(await introDelay(760, token))) return;
+  launchIntroConfetti(token);
+  if (!(await introDelay(2240, token))) return;
   await finishIntro({ token });
 }
 
