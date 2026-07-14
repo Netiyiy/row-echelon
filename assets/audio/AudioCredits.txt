@@ -13,13 +13,10 @@ Interface sound effects
 -----------------------
 "51 UI sound effects (buttons, switches and clicks)" by Kenney
 https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks
-Bundled files: ui_tap.wav, ui_row.wav, ui_apply.wav, ui_reset.wav
-
-Intro sound effects
--------------------
-"UI Click Sounds (Sci Fi)" by EZduzziteh
-https://opengameart.org/content/ui-click-sounds-sci-fi
-Bundled files: intro/intro_click_1.mp3 through intro/intro_click_8.mp3
+Bundled files: ui_tap.wav, ui_row.wav, ui_apply.wav, ui_reset.wav,
+intro/intro_button_down.wav, intro/intro_button_up.wav,
+intro/intro_key_clack.wav, intro/intro_key_clack_alt.wav,
+intro/intro_key_press.wav, intro/intro_key_soft.wav, intro/intro_key_tick.wav
 
 Level completion sound
 ----------------------
