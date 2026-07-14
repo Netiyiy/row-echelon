@@ -22,6 +22,21 @@ struct RowEchelonApp: App {
         }
     }
 
+    private func setAudioSession(active: Bool) {
+        do {
+            if active {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } else {
+                try AVAudioSession.sharedInstance().setActive(
+                    false,
+                    options: .notifyOthersOnDeactivation
+                )
+            }
+        } catch {
+            // WebKit still pauses and resumes its media when session activation fails.
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             GameContainerView()
@@ -29,9 +44,11 @@ struct RowEchelonApp: App {
                 .onChange(of: scenePhase, initial: true) { _, phase in
                     switch phase {
                     case .active:
+                        setAudioSession(active: true)
                         NotificationCenter.default.post(name: .rowEchelonDidBecomeActive, object: nil)
                     case .inactive, .background:
                         NotificationCenter.default.post(name: .rowEchelonDidEnterBackground, object: nil)
+                        setAudioSession(active: false)
                     @unknown default:
                         break
                     }

@@ -137,6 +137,7 @@ const SCORING = Object.freeze({
 });
 const SUPABASE_API_BASE_URL =
   "https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api";
+const NATIVE_IOS_APP = /RowEchelon-iOS\//.test(navigator.userAgent || "");
 const SUSPEND_AUDIO_WHEN_HIDDEN = navigator.userAgentData?.mobile === true
   || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
   || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -217,7 +218,9 @@ class GameAudio {
     this.fadeFrame = null;
     this.restoreTimer = null;
     this.enabled = localStorage.getItem(SOUND_KEY) !== "false";
-    this.userActivated = false;
+    // The native wrapper explicitly allows autoplay in WKWebView, so it does not
+    // need to wait for the first tap. Browsers keep their normal gesture policy.
+    this.userActivated = NATIVE_IOS_APP;
     this.suspended = document.hidden;
     this.introMode = false;
   }
@@ -241,6 +244,19 @@ class GameAudio {
     this.prepareIntroAudio();
     this.startMusic();
     return unlockPromise;
+  }
+
+  resumeFromAppActivation() {
+    if (!NATIVE_IOS_APP || document.hidden || !this.enabled) return;
+    this.userActivated = true;
+    this.suspended = false;
+    if (this.introMode) {
+      this.prepareIntroAudio();
+      if (this.preferIntroMediaElements) this.unlockIntroMediaElements();
+      else this.unlockIntroAudio();
+      return;
+    }
+    this.startMusic();
   }
 
   ensureIntroContext() {
@@ -2472,6 +2488,7 @@ document.addEventListener("visibilitychange", () => {
     return;
   }
   if (checkSessionInactivity()) return;
+  audio.resumeFromAppActivation();
   resumeLevelTimer();
 });
 window.addEventListener("pagehide", () => {
@@ -2480,6 +2497,7 @@ window.addEventListener("pagehide", () => {
 });
 window.addEventListener("pageshow", () => {
   if (checkSessionInactivity()) return;
+  audio.resumeFromAppActivation();
   resumeLevelTimer();
 });
 document.addEventListener("freeze", () => {
@@ -2499,3 +2517,4 @@ refreshLeaderboard();
 if ((!signedIn() || localStorage.getItem(INTRO_SEEN_KEY) !== "true") && !state.introVisible) {
   showIntro();
 }
+audio.resumeFromAppActivation();
