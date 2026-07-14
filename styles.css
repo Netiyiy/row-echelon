@@ -958,6 +958,250 @@ h1 {
 .matrix {
   display: grid;
   gap: 10px;
+  transition:
+    opacity 300ms ease,
+    filter 340ms ease,
+    transform 420ms cubic-bezier(0.65, 0, 0.2, 1);
+}
+
+.matrix.solution-source-hidden {
+  opacity: 0;
+  filter: blur(5px);
+  pointer-events: none;
+  transform: scale(0.9);
+}
+
+.matrix-stage.solution-revealing {
+  border-color: rgb(199 209 140 / 62%);
+  box-shadow:
+    0 5px 0 rgb(0 0 0 / 14%),
+    0 24px 38px -28px rgb(199 209 140 / 58%);
+}
+
+.solution-reveal {
+  --solution-cell: clamp(45px, 13vw, 82px);
+  --solution-rhs: clamp(62px, 18vw, 112px);
+  position: absolute;
+  z-index: 7;
+  inset: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--cream);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.9);
+  transition:
+    opacity 300ms ease,
+    transform 440ms cubic-bezier(0.12, 1.2, 0.24, 1);
+}
+
+.solution-reveal.ready {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.solution-reveal-content {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.solution-variable-bank {
+  display: grid;
+  grid-template-columns: repeat(3, var(--solution-cell)) var(--solution-rhs);
+  width: calc(var(--solution-cell) * 3 + var(--solution-rhs));
+  margin: 0 0 9px;
+  opacity: 0;
+  transform: translateY(-18px) scale(0.92);
+  transition:
+    opacity 260ms ease,
+    transform 420ms cubic-bezier(0.12, 1.22, 0.24, 1);
+}
+
+.solution-reveal.variables-visible .solution-variable-bank {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.solution-reveal.variables-landed .solution-variable-bank {
+  opacity: 0;
+  transform: translateY(12px) scale(0.88);
+}
+
+.solution-variable-source {
+  display: grid;
+  min-height: 28px;
+  place-items: center;
+  color: var(--accent);
+  font-size: clamp(18px, 5vw, 25px);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  text-shadow: 0 0 18px rgb(224 158 92 / 42%);
+}
+
+.solution-reveal.variables-visible .solution-variable-source {
+  animation: solution-variable-hover 760ms ease-in-out infinite alternate;
+}
+
+.solution-variable-source:nth-child(2) { animation-delay: 80ms !important; }
+.solution-variable-source:nth-child(3) { animation-delay: 160ms !important; }
+
+.solution-matrix-shell {
+  display: flex;
+  align-items: stretch;
+  gap: 11px;
+  transition:
+    opacity 380ms ease,
+    transform 580ms cubic-bezier(0.65, 0, 0.2, 1);
+}
+
+.solution-bracket {
+  width: 13px;
+  border-top: 2px solid var(--cream);
+  border-bottom: 2px solid var(--cream);
+  opacity: 0.94;
+  filter: drop-shadow(0 0 8px rgb(250 230 191 / 18%));
+  transform-origin: center;
+}
+
+.solution-bracket.left {
+  border-left: 2px solid var(--cream);
+  border-radius: 8px 0 0 8px;
+}
+
+.solution-bracket.right {
+  border-right: 2px solid var(--cream);
+  border-radius: 0 8px 8px 0;
+}
+
+.solution-matrix-grid {
+  display: grid;
+  gap: 6px;
+  transform-origin: center;
+}
+
+.solution-matrix-row {
+  display: grid;
+  grid-template-columns: repeat(3, var(--solution-cell)) var(--solution-rhs);
+  height: 46px;
+}
+
+.solution-matrix-cell {
+  display: grid;
+  place-items: center;
+  font-size: clamp(18px, 5.4vw, 25px);
+  font-weight: 720;
+  line-height: 1;
+  transform-origin: center;
+}
+
+.solution-matrix-cell.rhs {
+  border-left: 1px solid rgb(199 163 125 / 65%);
+  color: var(--muted-cream);
+}
+
+.solution-matrix-cell.diagonal {
+  color: var(--success);
+  font-weight: 880;
+}
+
+.solution-matrix-cell.variable-landed {
+  animation: solution-variable-land 420ms cubic-bezier(0.12, 1.3, 0.24, 1);
+  text-shadow: 0 0 18px rgb(199 209 140 / 54%);
+}
+
+.solution-diagonal-one {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.solution-equations {
+  position: absolute;
+  top: 37px;
+  left: 50%;
+  display: grid;
+  width: min(230px, 68vw);
+  gap: 6px;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 180ms ease;
+}
+
+.solution-reveal.equations-forming .solution-equations {
+  opacity: 1;
+}
+
+.solution-equation {
+  display: grid;
+  grid-template-columns: 1fr 28px 1fr;
+  height: 46px;
+  align-items: center;
+  font-size: clamp(21px, 6vw, 29px);
+  font-weight: 820;
+  text-align: center;
+}
+
+.solution-equation-token {
+  opacity: 0;
+}
+
+.solution-equation-token.visible {
+  opacity: 1;
+  animation: solution-equation-token-land 360ms cubic-bezier(0.12, 1.3, 0.24, 1);
+}
+
+.solution-equation-token.variable {
+  color: var(--success);
+}
+
+.solution-equation-token.value {
+  color: var(--cream);
+}
+
+.solution-equation-equals {
+  color: var(--accent);
+  opacity: 0;
+  transform: scale(0.2) rotate(-12deg);
+}
+
+.solution-reveal.equations-forming .solution-equation-equals {
+  animation: solution-equals-enter 430ms cubic-bezier(0.12, 1.34, 0.24, 1) forwards;
+}
+
+.solution-equation:nth-child(2) .solution-equation-equals { animation-delay: 65ms !important; }
+.solution-equation:nth-child(3) .solution-equation-equals { animation-delay: 130ms !important; }
+
+.solution-reveal.solution-final .solution-matrix-shell {
+  opacity: 0;
+  transform: scale(0.58);
+}
+
+.solution-reveal.solution-final .solution-equations {
+  animation: solution-equations-settle 620ms cubic-bezier(0.12, 1.26, 0.24, 1) both;
+}
+
+.solution-flyer {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  color: var(--cream);
+  font-size: clamp(18px, 5.4vw, 25px);
+  font-weight: 850;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 5px 16px rgb(0 0 0 / 34%);
+}
+
+.solution-flyer.variable {
+  color: var(--success);
+  text-shadow: 0 0 18px rgb(199 209 140 / 55%);
+}
+
+.solution-flyer.morphing {
+  color: var(--cream);
 }
 
 .matrix-row {
@@ -1011,16 +1255,6 @@ h1 {
   animation: gameplay-row-scale 560ms cubic-bezier(0.12, 1.28, 0.22, 1);
 }
 
-.matrix-row.slot-active {
-  border-color: var(--accent);
-  background: var(--panel-raised);
-  animation: slot-card-pulse 300ms ease-out;
-}
-
-.matrix-row.row-solved {
-  animation: solved-row-glow 580ms ease-out;
-}
-
 .matrix-value {
   display: grid;
   min-width: 0;
@@ -1037,30 +1271,9 @@ h1 {
   border-left: 1px solid rgb(199 163 125 / 58%);
 }
 
-.slot-window {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.slot-reel {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transition-property: transform;
-  transition-timing-function: cubic-bezier(0.14, 0.72, 0.24, 1);
-}
-
-.slot-item {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-}
-
 .sparkle-layer {
   position: absolute;
+  z-index: 9;
   inset: 0;
   overflow: visible;
   pointer-events: none;
@@ -1795,29 +2008,33 @@ h1 {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes slot-card-pulse {
-  0% {
-    transform: scale(1);
-  }
-  46% {
-    transform: scale(1.025);
-  }
-  100% {
-    transform: scale(1);
-  }
+@keyframes solution-variable-hover {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-4px) scale(1.04); }
 }
 
-@keyframes solved-row-glow {
-  0% {
-    border-color: var(--success);
-    background: rgb(199 209 140 / 24%);
-    box-shadow: 0 0 0 0 rgb(199 209 140 / 60%);
-  }
-  100% {
-    border-color: rgb(163 110 79 / 72%);
-    background: var(--panel-raised);
-    box-shadow: 0 0 0 10px rgb(199 209 140 / 0%);
-  }
+@keyframes solution-variable-land {
+  0% { filter: brightness(1.8); transform: translateY(-8px) scale(1.35); }
+  58% { transform: translateY(2px) scale(0.94); }
+  100% { filter: brightness(1); transform: translateY(0) scale(1); }
+}
+
+@keyframes solution-equals-enter {
+  0% { opacity: 0; transform: scale(0.2) rotate(-12deg); }
+  70% { opacity: 1; transform: scale(1.18) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes solution-equation-token-land {
+  0% { opacity: 0; filter: blur(3px); transform: scale(0.68); }
+  68% { opacity: 1; filter: blur(0); transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes solution-equations-settle {
+  0% { filter: blur(2px); transform: translateX(-50%) scale(0.78); }
+  64% { filter: blur(0); transform: translateX(-50%) scale(1.07); }
+  100% { transform: translateX(-50%) scale(1); }
 }
 
 @keyframes sparkle-burst {
