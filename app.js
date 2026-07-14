@@ -1646,14 +1646,24 @@ async function completeLevel() {
 }
 
 function resetSolutionReveal() {
-  $("#matrix-stage")?.classList.remove("solution-revealing", "direct-solution-final");
+  const stage = $("#matrix-stage");
+  stage?.classList.remove(
+    "solution-revealing",
+    "direct-solution-final",
+    "direct-variables-locked",
+  );
+  if (stage) {
+    stage.style.width = "";
+    stage.style.minHeight = "";
+  }
   const matrix = $("#matrix");
   matrix?.classList.remove("direct-solution-transforming", "direct-solution-compacted");
   if (matrix) {
     matrix.style.width = "";
     matrix.style.marginInline = "";
   }
-  $$(".direct-solution-flyer, .direct-solution-equals").forEach((element) => element.remove());
+  $$(".direct-solution-flyer, .direct-solution-equals, .direct-landing-ring")
+    .forEach((element) => element.remove());
   $$(".direct-variable-cell, .direct-zero-cell, .direct-value-cell").forEach((cell) => {
     cell.classList.remove("direct-variable-cell", "direct-zero-cell", "direct-value-cell");
   });
@@ -1661,18 +1671,22 @@ function resetSolutionReveal() {
 
 async function dropDirectSolutionVariable(target, index, stageRect, token) {
   const targetRect = target.getBoundingClientRect();
-  const startTop = stageRect.top - 42;
+  const flyerWidth = Math.min(64, Math.max(46, targetRect.width * 0.48));
+  const flyerHeight = 42;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  const startTop = stageRect.top - 58;
   const flyer = document.createElement("span");
   flyer.className = "direct-solution-flyer";
   flyer.textContent = `x${index + 1}`;
-  flyer.style.left = `${targetRect.left}px`;
+  flyer.style.left = `${targetCenterX - flyerWidth / 2}px`;
   flyer.style.top = `${startTop}px`;
-  flyer.style.width = `${targetRect.width}px`;
-  flyer.style.height = `${targetRect.height}px`;
+  flyer.style.width = `${flyerWidth}px`;
+  flyer.style.height = `${flyerHeight}px`;
   document.body.append(flyer);
 
-  const delay = index * 140;
-  const distance = targetRect.top - startTop;
+  const delay = index * 155;
+  const distance = targetCenterY - (startTop + flyerHeight / 2);
   const oneFade = target.animate(
     [
       { opacity: 1, transform: "translateY(0) scale(1)" },
@@ -1684,7 +1698,8 @@ async function dropDirectSolutionVariable(target, index, stageRect, token) {
     [
       { opacity: 0, filter: "blur(3px)", transform: "translateY(-20px) scale(0.76)" },
       { opacity: 1, offset: 0.16, filter: "blur(0)", transform: "translateY(0) scale(1)" },
-      { opacity: 1, offset: 0.78, transform: `translateY(${distance - 9}px) scale(1.12)` },
+      { opacity: 1, offset: 0.72, transform: `translateY(${distance - 15}px) scale(1.08)` },
+      { opacity: 1, offset: 0.9, transform: `translateY(${distance + 4}px) scale(0.96)` },
       { opacity: 1, transform: `translateY(${distance}px) scale(1)` },
     ],
     {
@@ -1699,6 +1714,12 @@ async function dropDirectSolutionVariable(target, index, stageRect, token) {
   if (token === state.celebrationToken) {
     target.textContent = `x${index + 1}`;
     target.classList.add("direct-variable-cell");
+    const ring = document.createElement("span");
+    ring.className = "direct-landing-ring";
+    ring.style.left = `${targetCenterX}px`;
+    ring.style.top = `${targetCenterY}px`;
+    document.body.append(ring);
+    window.setTimeout(() => ring.remove(), 620);
   }
   flyer.remove();
 }
@@ -1716,7 +1737,7 @@ function prepareDirectSolutionRows() {
       } else if (columnIndex === cells.length - 1) {
         cell.classList.add("direct-value-cell");
       } else {
-        zeroCells.push(cell);
+        zeroCells.push({ cell, rowIndex });
         cell.classList.add("direct-zero-cell");
       }
     });
@@ -1726,6 +1747,30 @@ function prepareDirectSolutionRows() {
     row.append(equals);
   });
   return { rows, diagonalCells, zeroCells };
+}
+
+function compactDirectSolutionStage(stage, sourceMatrix) {
+  const stageRect = stage.getBoundingClientRect();
+  const matrixRect = sourceMatrix.getBoundingClientRect();
+  const desktop = window.innerWidth >= 800;
+  const compactStageWidth = Math.min(stageRect.width, desktop ? 420 : 360);
+  const compactStageHeight = desktop ? 252 : 220;
+  const compactMatrixWidth = Math.min(
+    desktop ? 330 : 328,
+    compactStageWidth - (desktop ? 52 : 32),
+  );
+
+  stage.style.width = `${stageRect.width}px`;
+  stage.style.minHeight = `${stageRect.height}px`;
+  sourceMatrix.style.width = `${matrixRect.width}px`;
+  sourceMatrix.style.marginInline = "auto";
+  void stage.offsetWidth;
+
+  sourceMatrix.classList.add("direct-solution-compacted");
+  stage.classList.add("direct-solution-final");
+  stage.style.width = `${compactStageWidth}px`;
+  stage.style.minHeight = `${compactStageHeight}px`;
+  sourceMatrix.style.width = `${compactMatrixWidth}px`;
 }
 
 async function animateSolutionReveal(token) {
@@ -1741,8 +1786,7 @@ async function animateSolutionReveal(token) {
   if (introReducedMotion()) {
     diagonalCells.forEach((cell, index) => { cell.textContent = `x${index + 1}`; });
     prepareDirectSolutionRows();
-    sourceMatrix.classList.add("direct-solution-compacted");
-    stage.classList.add("direct-solution-final");
+    compactDirectSolutionStage(stage, sourceMatrix);
     await wait(80);
     return;
   }
@@ -1750,31 +1794,40 @@ async function animateSolutionReveal(token) {
   await Promise.all(diagonalCells.map((cell, index) =>
     dropDirectSolutionVariable(cell, index, stage.getBoundingClientRect(), token)));
   if (token !== state.celebrationToken) return;
-  await wait(430);
+  restartAnimationClass(stage, "direct-variables-locked", 760);
+  await wait(540);
   if (token !== state.celebrationToken) return;
 
   const parts = prepareDirectSolutionRows();
   sourceMatrix.classList.add("direct-solution-transforming");
-  const zeroAnimations = parts.zeroCells.map((cell, index) => cell.animate(
-    [
-      { opacity: 1, filter: "blur(0)", transform: "scale(1)" },
-      { opacity: 0, filter: "blur(5px)", transform: "scale(0.16)" },
-    ],
-    { duration: 390, delay: index * 24, fill: "forwards", easing: "cubic-bezier(0.7, 0, 0.84, 0)" },
-  ));
+  const zeroAnimations = parts.zeroCells.map(({ cell, rowIndex }, index) => {
+    const cellRect = cell.getBoundingClientRect();
+    const variableRect = parts.diagonalCells[rowIndex].getBoundingClientRect();
+    const collapseX = (variableRect.left + variableRect.width / 2)
+      - (cellRect.left + cellRect.width / 2);
+    return cell.animate(
+      [
+        { opacity: 1, filter: "blur(0)", transform: "translateX(0) scale(1)" },
+        {
+          opacity: 0,
+          filter: "blur(5px)",
+          transform: `translateX(${collapseX * 0.72}px) scale(0.12)`,
+        },
+      ],
+      {
+        duration: 430,
+        delay: index * 28,
+        fill: "forwards",
+        easing: "cubic-bezier(0.7, 0, 0.84, 0)",
+      },
+    );
+  });
   await Promise.all(zeroAnimations.map((animation) => animation.finished.catch(() => {})));
   if (token !== state.celebrationToken) return;
 
   zeroAnimations.forEach((animation) => animation.cancel());
-  const currentWidth = sourceMatrix.getBoundingClientRect().width;
-  const compactWidth = Math.min(330, currentWidth * 0.72);
-  sourceMatrix.style.width = `${currentWidth}px`;
-  sourceMatrix.style.marginInline = "auto";
-  void sourceMatrix.offsetWidth;
-  sourceMatrix.classList.add("direct-solution-compacted");
-  sourceMatrix.style.width = `${compactWidth}px`;
-  stage.classList.add("direct-solution-final");
-  await wait(1650);
+  compactDirectSolutionStage(stage, sourceMatrix);
+  await wait(1800);
 }
 
 function launchGameplayConfetti(token) {

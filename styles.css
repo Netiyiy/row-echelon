@@ -925,6 +925,10 @@ h1 {
     0 5px 0 rgb(0 0 0 / 14%),
     0 28px 28px -30px rgb(224 158 92 / 60%);
   transition:
+    width 900ms cubic-bezier(0.65, 0, 0.2, 1),
+    min-height 820ms cubic-bezier(0.65, 0, 0.2, 1),
+    padding 820ms cubic-bezier(0.65, 0, 0.2, 1),
+    border-radius 620ms ease,
     border-color 260ms ease,
     box-shadow 300ms ease,
     transform 300ms cubic-bezier(0.12, 1.12, 0.24, 1);
@@ -981,7 +985,22 @@ h1 {
 }
 
 .matrix-stage.direct-solution-final {
+  margin-right: auto;
+  margin-left: auto;
+  padding: clamp(15px, 2vw, 20px);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 42%, rgb(199 209 140 / 8%), transparent 60%),
+    rgb(92 61 48 / 98%);
+  box-shadow:
+    0 5px 0 rgb(0 0 0 / 14%),
+    0 26px 42px -28px rgb(199 209 140 / 62%),
+    inset 0 0 28px rgb(199 209 140 / 6%);
   animation: direct-solution-stage-settle 760ms cubic-bezier(0.12, 1.26, 0.24, 1);
+}
+
+.matrix-stage.direct-variables-locked::after {
+  animation: direct-variable-lock-flash 720ms cubic-bezier(0.12, 1.2, 0.24, 1);
 }
 
 .direct-solution-flyer {
@@ -995,6 +1014,34 @@ h1 {
   line-height: 1;
   pointer-events: none;
   text-shadow: 0 0 18px rgb(199 209 140 / 55%);
+}
+
+.direct-solution-flyer::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(199 209 140 / 72%), transparent);
+  box-shadow: 0 0 12px rgb(199 209 140 / 52%);
+  content: "";
+  opacity: 0.72;
+  transform: translate(-50%, 13px);
+}
+
+.direct-landing-ring {
+  position: fixed;
+  z-index: 119;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgb(199 209 140 / 78%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 12px rgb(199 209 140 / 62%),
+    inset 0 0 8px rgb(250 230 191 / 48%);
+  pointer-events: none;
+  animation: direct-landing-ring 600ms cubic-bezier(0.12, 1.05, 0.24, 1) forwards;
+  transform: translate(-50%, -50%);
 }
 
 .matrix.direct-solution-transforming,
@@ -1024,7 +1071,12 @@ h1 {
 
 .matrix.direct-solution-compacted .matrix-row {
   grid-template-columns: minmax(70px, 1fr) 30px minmax(70px, 1fr);
+  height: 56px;
+  min-height: 56px;
   padding-inline: 12px;
+  border-color: rgb(199 209 140 / 34%);
+  background: linear-gradient(90deg, rgb(110 74 58 / 96%), rgb(102 68 54 / 96%));
+  box-shadow: inset 0 0 18px rgb(199 209 140 / 4%);
   animation: direct-solution-row-settle 720ms cubic-bezier(0.12, 1.25, 0.24, 1) both;
 }
 
@@ -1047,6 +1099,9 @@ h1 {
 
 .matrix.direct-solution-compacted .direct-value-cell {
   grid-column: 3;
+  color: var(--cream);
+  font-weight: 850;
+  text-shadow: 0 0 14px rgb(250 230 191 / 14%);
 }
 
 .matrix.direct-solution-compacted .matrix-row:nth-child(2) .direct-solution-equals { animation-delay: 70ms; }
@@ -2170,6 +2225,18 @@ h1 {
     filter: brightness(1);
     transform: scale(1);
   }
+}
+
+@keyframes direct-variable-lock-flash {
+  0% { opacity: 0; transform: scale(0.94); }
+  48% { opacity: 1; box-shadow: 0 0 36px rgb(199 209 140 / 44%); transform: scale(1.015); }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+
+@keyframes direct-landing-ring {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25); }
+  22% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(3.8); }
 }
 
 @keyframes direct-solution-row-settle {
