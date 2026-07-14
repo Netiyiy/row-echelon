@@ -99,10 +99,10 @@ const cloneMatrix = (matrix) => matrix.map((row) => row.map((value) => value.clo
 const LEADERBOARD_LIMIT = 10;
 const SESSION_KEY = "rowEchelonPlayerSession";
 const SCORING = Object.freeze({
-  A: 165,
+  A: 300,
   P: 1.22,
-  B: 7,
-  C: 1.25,
+  B: 5,
+  C: 0.75,
 });
 const SUPABASE_API_BASE_URL =
   "https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api";
@@ -475,16 +475,24 @@ function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
   $(".game-shell").classList.toggle("leaderboard-visible", state.leaderboardVisible);
   renderResultsStage();
 
-  $("#leaderboard-date").textContent = state.leaderboardDate
-    ? `TODAY ${state.leaderboardDate}`
-    : "TODAY";
-  $("#leaderboard-message").textContent = state.leaderboardMessage;
+  const leaderboardDate = $("#leaderboard-date");
+  if (leaderboardDate) {
+    leaderboardDate.textContent = state.leaderboardDate
+      ? `TODAY ${state.leaderboardDate}`
+      : "TODAY";
+  }
+  const leaderboardMessage = $("#leaderboard-message");
+  if (leaderboardMessage) {
+    leaderboardMessage.textContent = state.leaderboardMessage;
+  }
 
   const rows = leaderboardRows();
   const list = $("#leaderboard-list");
   if (!signedIn()) {
     list.replaceChildren();
-    $("#leaderboard-message").textContent = "Create a player to compete.";
+    if (leaderboardMessage) {
+      leaderboardMessage.textContent = "Create a player to compete.";
+    }
     return;
   }
   if (!rows.length) {
@@ -545,6 +553,7 @@ function renderRankSummary(result = {}) {
   const breakdown = result.scoreBreakdown || state.resultScoreBreakdown;
   const totalScore = result.totalScore ?? state.playerEntry?.totalScore ?? breakdown?.score ?? 0;
   const summary = $("#rank-summary");
+  if (!summary) return;
 
   if (result.offline) {
     summary.textContent = "Score is local until the backend is online.";
@@ -576,6 +585,8 @@ function prepareResultCard(result = {}) {
   $("#result-reward").textContent = "+0";
   $("#result-step-penalty").textContent = "-0";
   $("#result-time-penalty").textContent = "-0";
+  $("#result-formula").textContent = "";
+  $("#result-formula").classList.remove("revealed");
 
   renderRankSummary(result);
   renderLeaderboard({
@@ -639,6 +650,10 @@ async function animateResults(result, token) {
   await wait(180);
   if (token !== state.resultAnimationToken) return;
   await animateNumber($("#result-score"), breakdown.score, { duration: 900, token });
+  const formula = $("#result-formula");
+  formula.textContent =
+    `max(0, ${breakdown.levelReward} - ${breakdown.stepPenalty} - ${breakdown.timePenalty}) = ${breakdown.score}`;
+  formula.classList.add("revealed");
 }
 
 async function animateLeaderboardRows(token) {
@@ -681,10 +696,10 @@ async function showLeaderboardStage() {
 
   if (result.rankImproved) {
     audio.play("rank");
-    launchLeaderboardConfetti();
   }
 
   await animateLeaderboardRows(token);
+  launchLeaderboardConfetti();
 }
 
 async function goToNextLevel() {
@@ -753,8 +768,9 @@ function clearPlayerAndLock(message) {
 
 function launchLeaderboardConfetti() {
   const layer = $("#leaderboard-confetti");
+  if (!layer) return;
   layer.replaceChildren();
-  for (let index = 0; index < 24; index += 1) {
+  for (let index = 0; index < 36; index += 1) {
     const piece = document.createElement("span");
     piece.className = "leaderboard-confetti-piece";
     const angle = Math.random() * Math.PI * 2;

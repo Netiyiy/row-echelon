@@ -351,6 +351,7 @@ h1 {
 
 .results-card {
   position: relative;
+  z-index: 2;
   width: min(100%, 390px);
   max-height: calc(100svh - 148px);
   padding: 16px;
@@ -428,6 +429,26 @@ h1 {
   color: var(--cream);
 }
 
+.result-formula {
+  min-height: 16px;
+  margin: 14px 0 0;
+  color: var(--muted-cream);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 260ms ease,
+    transform 260ms cubic-bezier(0.18, 0.82, 0.22, 1);
+}
+
+.result-formula.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .rank-summary {
   min-height: 18px;
   margin: 13px 0 0;
@@ -457,10 +478,19 @@ h1 {
   margin: 6px 0 0;
 }
 
+.leaderboard-title {
+  margin: 0;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-align: center;
+}
+
 .leaderboard-list {
   display: grid;
   gap: 7px;
-  margin: 14px 0 0;
+  margin: 18px 0 0;
   padding: 0;
   perspective: 620px;
   list-style: none;
@@ -556,7 +586,8 @@ h1 {
 }
 
 .leaderboard-confetti {
-  position: absolute;
+  position: fixed;
+  z-index: 3;
   inset: 0;
   pointer-events: none;
 }
@@ -575,6 +606,7 @@ h1 {
 
 .next-level-button {
   position: fixed;
+  z-index: 4;
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom) + 20px);
   width: min(340px, calc(100vw - 48px));

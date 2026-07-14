@@ -10,7 +10,7 @@
     <title>Row Echelon</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=18" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body>
     <main class="game-shell" aria-label="Row Echelon game">
@@ -109,19 +109,15 @@
                 <strong id="result-time-penalty">-0</strong>
               </div>
             </div>
+            <p id="result-formula" class="result-formula" aria-live="polite"></p>
           </div>
 
           <div id="leaderboard-view" class="result-view leaderboard-view" hidden>
-            <div class="leaderboard-heading">
-              <p class="eyebrow">DAILY LEADERBOARD</p>
-              <p id="leaderboard-date" class="leaderboard-date">TODAY</p>
-            </div>
-            <p id="rank-summary" class="rank-summary" aria-live="polite"></p>
+            <p class="leaderboard-title">DAILY LEADERBOARD</p>
             <ol id="leaderboard-list" class="leaderboard-list"></ol>
-            <p id="leaderboard-message" class="leaderboard-message" aria-live="polite"></p>
-            <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
           </div>
         </div>
+        <div id="leaderboard-confetti" class="leaderboard-confetti" aria-hidden="true"></div>
         <button id="next-level-button" class="next-level-button" type="button">NEXT</button>
       </section>
 
@@ -131,9 +127,9 @@
       <div id="settings-menu" class="settings-menu" hidden>
         <button id="logout-button" class="logout-button" type="button">LOG OUT</button>
       </div>
-      <span class="version-label" aria-label="Version">v20</span>
+      <span class="version-label" aria-label="Version">v21</span>
     </main>
 
-    <script src="app.js?v=15" defer></script>
+    <script src="app.js?v=16" defer></script>
   </body>
 </html>
