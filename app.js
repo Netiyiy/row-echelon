@@ -585,8 +585,8 @@ function prepareResultCard(result = {}) {
   $("#result-reward").textContent = "+0";
   $("#result-step-penalty").textContent = "-0";
   $("#result-time-penalty").textContent = "-0";
-  $("#result-formula").textContent = "";
-  $("#result-formula").classList.remove("revealed");
+  $("#result-message").textContent = "";
+  $("#result-message").classList.remove("revealed");
 
   renderRankSummary(result);
   renderLeaderboard({
@@ -650,10 +650,9 @@ async function animateResults(result, token) {
   await wait(180);
   if (token !== state.resultAnimationToken) return;
   await animateNumber($("#result-score"), breakdown.score, { duration: 900, token });
-  const formula = $("#result-formula");
-  formula.textContent =
-    `max(0, ${breakdown.levelReward} - ${breakdown.stepPenalty} - ${breakdown.timePenalty}) = ${breakdown.score}`;
-  formula.classList.add("revealed");
+  const message = $("#result-message");
+  message.textContent = "Good job!";
+  message.classList.add("revealed");
 }
 
 async function animateLeaderboardRows(token) {
