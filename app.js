@@ -559,7 +559,7 @@ function movedHigherInRank(previousRank, currentRank) {
     && current < previous;
 }
 
-function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
+function renderLeaderboard() {
   const screen = $("#results-screen");
   screen.hidden = !state.leaderboardVisible;
   if (!state.leaderboardVisible) {
@@ -606,11 +606,9 @@ function renderLeaderboard({ rankImproved = false, previousRank = null } = {}) {
       }
 
       row.className = `leaderboard-row${entry.isCurrentPlayer ? " current-player" : ""}`;
-      if (rankImproved && entry.isCurrentPlayer && movedHigherInRank(previousRank, entry.rank)) {
-        row.classList.add("rank-up");
-        row.style.setProperty("--rank-shift", `${Math.min(previousRank - entry.rank, 6) * 38}px`);
-        row.setAttribute("aria-label", `Rank improved from ${previousRank} to ${entry.rank}`);
-      }
+      row.dataset.playerId = entry.playerId || "";
+      row.dataset.finalRank = String(entry.rank);
+      row.dataset.score = String(entry.totalScore ?? 0);
       if (entry.isCurrentPlayer) row.setAttribute("aria-current", "true");
 
       const rank = document.createElement("span");
@@ -640,7 +638,7 @@ function setLeaderboardData(data, renderOptions = {}) {
   state.playerEntry = data.playerEntry || null;
   state.leaderboardDate = data.date || "";
   if (!renderOptions.skipRender) {
-    renderLeaderboard(renderOptions);
+    renderLeaderboard();
   }
 }
 
@@ -684,10 +682,7 @@ function prepareResultCard(result = {}) {
   $("#result-message").classList.remove("revealed");
 
   renderRankSummary(result);
-  renderLeaderboard({
-    rankImproved: result.rankImproved,
-    previousRank: result.previousRank,
-  });
+  renderLeaderboard();
 }
 
 function animateNumber(element, to, {
@@ -758,6 +753,201 @@ async function animateLeaderboardRows(token) {
     row.classList.add("revealed");
     await wait(130);
   }
+  await wait(440);
+  if (token !== state.resultAnimationToken) return;
+  rows.forEach((row) => row.classList.add("settled"));
+}
+
+function regularLeaderboardRows() {
+  return $$("#leaderboard-list .leaderboard-row");
+}
+
+function rankLabel(row) {
+  return row.querySelector(".leaderboard-rank");
+}
+
+function setDisplayedRank(row, rank) {
+  const label = rankLabel(row);
+  if (label) label.textContent = Number.isInteger(rank) ? `#${rank}` : "NEW";
+}
+
+function prepareLeaderboardScoreClimb(result) {
+  const list = $("#leaderboard-list");
+  const currentRow = list?.querySelector(".leaderboard-row.current-player");
+  if (!list || !currentRow || result.offline) return null;
+
+  const finalRank = Number(result.rank ?? currentRow.dataset.finalRank);
+  const previousRankValue = Number(result.previousRank);
+  const previousRank = Number.isInteger(previousRankValue) && previousRankValue > 0
+    ? previousRankValue
+    : null;
+  const previousScore = Math.max(0, Number(result.previousScore) || 0);
+  const finalScore = Math.max(previousScore, Number(result.totalScore) || previousScore);
+  const shouldClimb = previousRank === null || previousRank > finalRank;
+
+  if (shouldClimb) {
+    const otherRows = regularLeaderboardRows().filter((row) => row !== currentRow);
+    currentRow.remove();
+    const insertionTarget = previousRank === null
+      ? null
+      : otherRows.find((row) => Number(row.dataset.finalRank) > previousRank) || null;
+    list.insertBefore(currentRow, insertionTarget);
+
+    for (const row of otherRows) {
+      const rowFinalRank = Number(row.dataset.finalRank);
+      const wasBelowFinalPosition = rowFinalRank > finalRank
+        && (previousRank === null || rowFinalRank <= previousRank);
+      setDisplayedRank(row, wasBelowFinalPosition ? rowFinalRank - 1 : rowFinalRank);
+    }
+    setDisplayedRank(currentRow, previousRank);
+  }
+
+  const score = currentRow.querySelector(".leaderboard-score");
+  if (score) score.textContent = `${Math.round(previousScore)} pts`;
+  currentRow.classList.add("score-climbing");
+
+  return {
+    list,
+    currentRow,
+    score,
+    previousRank,
+    finalRank,
+    previousScore,
+    finalScore,
+  };
+}
+
+function animateLeaderboardScoreValue(element, from, to, duration, token) {
+  return new Promise((resolve) => {
+    if (!element || to <= from || duration <= 0) {
+      if (element) element.textContent = `${Math.round(to)} pts`;
+      resolve(to);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const tick = (now) => {
+      if (token !== state.resultAnimationToken) {
+        resolve(from);
+        return;
+      }
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = progress * progress * (3 - (2 * progress));
+      const value = Math.round(from + ((to - from) * eased));
+      element.textContent = `${value} pts`;
+      if (progress < 1) {
+        window.requestAnimationFrame(tick);
+      } else {
+        resolve(to);
+      }
+    };
+    window.requestAnimationFrame(tick);
+  });
+}
+
+async function moveLeaderboardRowAbove(setup, upperRow, token) {
+  const rows = regularLeaderboardRows();
+  const before = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
+  const upperRank = Number(rankLabel(upperRow)?.textContent.replace("#", ""));
+
+  setup.list.insertBefore(setup.currentRow, upperRow);
+  if (Number.isInteger(upperRank)) {
+    setDisplayedRank(setup.currentRow, upperRank);
+    setDisplayedRank(upperRow, upperRank + 1);
+  }
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const row of rows) {
+    const distance = before.get(row) - row.getBoundingClientRect().top;
+    if (!distance) continue;
+    row.style.transition = "none";
+    row.style.transform = `translateY(${distance}px)`;
+  }
+  setup.currentRow.getBoundingClientRect();
+  for (const row of rows) {
+    if (!row.style.transform) continue;
+    row.style.transition = reducedMotion
+      ? "none"
+      : "transform 340ms cubic-bezier(0.16, 0.9, 0.18, 1)";
+    row.style.transform = "translateY(0)";
+  }
+  setup.currentRow.classList.add("rank-passing");
+  upperRow.classList.add("rank-passed");
+
+  if (!reducedMotion) await wait(360);
+  if (token !== state.resultAnimationToken) return;
+  for (const row of rows) {
+    row.style.removeProperty("transition");
+    row.style.removeProperty("transform");
+    row.classList.remove("rank-passing", "rank-passed");
+  }
+}
+
+async function animateLeaderboardScoreClimb(result, token, preparedSetup = null) {
+  const setup = preparedSetup || prepareLeaderboardScoreClimb(result);
+  if (!setup) return false;
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const totalGain = Math.max(1, setup.finalScore - setup.previousScore);
+  let displayedScore = setup.previousScore;
+  let movedRows = 0;
+  const targetIndex = Math.min(
+    Math.max(0, setup.finalRank - 1),
+    regularLeaderboardRows().length - 1,
+  );
+
+  while (regularLeaderboardRows().indexOf(setup.currentRow) > targetIndex) {
+    if (token !== state.resultAnimationToken) return false;
+    const rows = regularLeaderboardRows();
+    const currentIndex = rows.indexOf(setup.currentRow);
+    const upperRow = rows[currentIndex - 1];
+    if (!upperRow) break;
+
+    const passingScore = Number(upperRow.dataset.score) + 1;
+    if (!Number.isFinite(passingScore) || passingScore > setup.finalScore) break;
+    const nextScore = Math.max(displayedScore, passingScore);
+    const duration = reducedMotion
+      ? 0
+      : Math.max(180, Math.round(1700 * ((nextScore - displayedScore) / totalGain)));
+    displayedScore = await animateLeaderboardScoreValue(
+      setup.score,
+      displayedScore,
+      nextScore,
+      duration,
+      token,
+    );
+    if (token !== state.resultAnimationToken) return false;
+    await moveLeaderboardRowAbove(setup, upperRow, token);
+    movedRows += 1;
+  }
+
+  if (token !== state.resultAnimationToken) return false;
+  const remainingDuration = reducedMotion
+    ? 0
+    : Math.max(260, Math.round(1700 * ((setup.finalScore - displayedScore) / totalGain)));
+  await animateLeaderboardScoreValue(
+    setup.score,
+    displayedScore,
+    setup.finalScore,
+    remainingDuration,
+    token,
+  );
+  if (token !== state.resultAnimationToken) return false;
+
+  setup.currentRow.classList.remove("score-climbing");
+  const reachedFinalPosition = regularLeaderboardRows().indexOf(setup.currentRow) === targetIndex;
+  if (reachedFinalPosition) {
+    for (const row of regularLeaderboardRows()) {
+      setDisplayedRank(row, Number(row.dataset.finalRank));
+    }
+  }
+  setup.currentRow.setAttribute(
+    "aria-label",
+    `Score increased from ${Math.round(setup.previousScore)} to ${Math.round(setup.finalScore)} points`,
+  );
+
+  return movedHigherInRank(setup.previousRank, setup.finalRank)
+    && (movedRows > 0 || reachedFinalPosition);
 }
 
 async function showResults(result, celebrationToken) {
@@ -783,17 +973,14 @@ async function showLeaderboardStage() {
   state.resultsStage = "leaderboard";
   const token = ++state.resultAnimationToken;
   const result = state.lastLeaderboardResult || {};
-  renderLeaderboard({
-    rankImproved: result.rankImproved,
-    previousRank: result.previousRank,
-  });
-
-  if (result.rankImproved) {
-    audio.play("rank");
-  }
-
+  renderLeaderboard();
+  const scoreClimb = prepareLeaderboardScoreClimb(result);
   await animateLeaderboardRows(token);
-  launchLeaderboardConfetti(result.rankImproved);
+  if (token !== state.resultAnimationToken) return;
+  const rankImproved = await animateLeaderboardScoreClimb(result, token, scoreClimb);
+  if (token !== state.resultAnimationToken) return;
+  if (rankImproved) audio.play("rank");
+  launchLeaderboardConfetti(rankImproved);
 }
 
 async function goToNextLevel() {
