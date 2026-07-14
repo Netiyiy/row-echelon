@@ -194,7 +194,6 @@ class GameAudio {
     this.background.volume = this.backgroundVolume;
     this.introFiles = {
       buttonUp: "assets/audio/intro/intro_button_up.wav",
-      press: "assets/audio/intro/intro_key_press.wav",
       soft: "assets/audio/intro/intro_key_soft.wav",
       tick: "assets/audio/intro/intro_key_tick.wav",
     };
@@ -2006,7 +2005,7 @@ async function formIntroMatrix(token) {
     $(".intro-bracket.left"),
     "intro-bracket-enter-left",
     0.54,
-    "press",
+    "buttonUp",
     token,
   );
   $("#intro-matrix").setAttribute("aria-hidden", "false");
@@ -2097,7 +2096,7 @@ async function animateIntroMatrixStep(step, token, stepIndex) {
     cell.classList.add("value-visible", "changing");
     if (!changeCuePlayed) {
       changeCuePlayed = true;
-      audio.playIntro(stepIndex % 2 ? "tick" : "press");
+      audio.playIntro(stepIndex % 2 ? "tick" : "soft");
     }
     if (!introReducedMotion()) {
       await cell.animate(
@@ -2139,7 +2138,7 @@ async function launchIntroSolutions(token) {
     if (token !== state.introToken) return false;
     target.dataset.solutionValue = solution.value;
     target.classList.add("solution-landed");
-    audio.playIntro(index === 0 ? "soft" : index === 1 ? "tick" : "press");
+    audio.playIntro(index === 0 ? "soft" : index === 1 ? "tick" : "buttonUp");
     if (!(await introDelay(150, token))) return false;
   }
   return true;
@@ -2166,12 +2165,12 @@ async function runIntroAnimation() {
   const token = state.introToken;
   const screen = $("#intro-screen");
   screen.classList.add("intro-running");
-  audio.playIntro("press");
+  audio.playIntro("soft");
 
   if (!(await introDelay(850, token))) return;
   screen.classList.add("intro-expanded");
   $("#intro-equations-expanded").setAttribute("aria-hidden", "false");
-  const expansionCues = ["soft", "tick", "press"];
+  const expansionCues = ["soft", "tick", "buttonUp"];
   $$("#intro-equations-expanded p").forEach((row, index) => {
     cueIntroAnimationAt(
       row.querySelector(".inserted"),
