@@ -16,6 +16,20 @@ const BLOCKED_NAME_FRAGMENTS = Object.freeze([
 const BLOCKED_NAME_WORDS = new Set([
   "ass", "cock", "dick", "rape", "sex",
 ]);
+const BLOCKED_ABBREVIATION_PATTERNS = Object.freeze([
+  /(?:f|ph)(?:[uiovx]?c+k|[uiovx]+k|k(?:ing|in|ed|er|ers|s))/,
+  /s+h+i?t+(?:ing|ed|y|s)?/,
+  /b+i?t+c+h+/,
+  /c+[uov]?n+t+/,
+  /p+u?s+s+y+/,
+  /w+h+o?r+e+/,
+  /s+l+u?t+/,
+  /p+o?r+n+/,
+]);
+const LEET_SUBSTITUTIONS: Record<string, string> = Object.freeze({
+  "0": "o", "1": "i", "2": "z", "3": "e", "4": "a",
+  "5": "s", "6": "g", "7": "t", "8": "b", "9": "g",
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,31 +109,39 @@ function normalizeName(value: unknown) {
 }
 
 function moderationText(value: unknown) {
-  const substitutions: Record<string, string> = {
-    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g",
-  };
   return String(value || "")
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[01345789]/g, (character) => substitutions[character]);
+    .replace(/[0-9]/g, (character) => LEET_SUBSTITUTIONS[character]);
 }
 
 function isBlockedName(name: string) {
   const moderated = moderationText(name);
   const compact = moderated.replace(/[^a-z]/g, "");
-  const words = moderated.split(/[^a-z]+/).filter(Boolean);
-  return BLOCKED_NAME_FRAGMENTS.some((term) => compact.includes(term))
-    || words.some((word) => BLOCKED_NAME_WORDS.has(word));
+  const compactForms = [...new Set([
+    compact,
+    compact.replace(/([a-z])\1+/g, "$1"),
+    compact.replace(/([a-z])\1{2,}/g, "$1$1"),
+  ])];
+  const wordForms = moderated
+    .split(/[^a-z]+/)
+    .filter(Boolean)
+    .flatMap((word) => [word, word.replace(/([a-z])\1+/g, "$1")]);
+  return compactForms.some((form) =>
+    BLOCKED_NAME_FRAGMENTS.some((term) => form.includes(term))
+      || BLOCKED_ABBREVIATION_PATTERNS.some((pattern) => pattern.test(form)),
+  ) || wordForms.some((word) => BLOCKED_NAME_WORDS.has(word));
 }
 
 function validateName(name: string) {
   if (name.length < 2 || name.length > 18) {
     throw new HttpError(400, "Name must be 2-18 characters.");
   }
-  if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
-    throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
-  }
   if (isBlockedName(name)) {
     throw new HttpError(400, "Choose a different username.");
+  }
+  if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+    throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
   }
 }
 

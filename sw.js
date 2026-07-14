@@ -1,4 +1,4 @@
-const CACHE_NAME = "row-echelon-v43";
+const CACHE_NAME = "row-echelon-v44";
 const ASSETS = [
   "./",
   "index.html",

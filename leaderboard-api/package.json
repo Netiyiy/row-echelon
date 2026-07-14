@@ -5,7 +5,8 @@
   "description": "Backend API for Row Echelon player accounts and daily leaderboard.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node username-moderation.test.js"
   },
   "engines": {
     "node": ">=18"

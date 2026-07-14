@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const http = require("node:http");
 const path = require("node:path");
 const { URL } = require("node:url");
+const { isBlockedName } = require("./username-moderation");
 
 const PORT = Number(process.env.PORT || 8787);
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "db.json");
@@ -16,13 +17,6 @@ const SCORING = Object.freeze({
   B: 7,
   C: 1.25,
 });
-const BLOCKED_NAME_FRAGMENTS = Object.freeze([
-  "fuck", "fuk", "phuck", "shit", "bitch", "cunt", "pussy", "whore",
-  "slut", "penis", "vagina", "nigger", "nigga", "faggot", "retard", "porn",
-]);
-const BLOCKED_NAME_WORDS = new Set([
-  "ass", "cock", "dick", "rape", "sex",
-]);
 
 let writeQueue = Promise.resolve();
 
@@ -96,30 +90,15 @@ function normalizeName(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-function moderationText(value) {
-  const substitutions = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g" };
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[01345789]/g, (character) => substitutions[character]);
-}
-
-function isBlockedName(name) {
-  const moderated = moderationText(name);
-  const compact = moderated.replace(/[^a-z]/g, "");
-  const words = moderated.split(/[^a-z]+/).filter(Boolean);
-  return BLOCKED_NAME_FRAGMENTS.some((term) => compact.includes(term))
-    || words.some((word) => BLOCKED_NAME_WORDS.has(word));
-}
-
 function validateName(name) {
   if (name.length < 2 || name.length > 18) {
     throw new HttpError(400, "Name must be 2-18 characters.");
   }
-  if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
-    throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
-  }
   if (isBlockedName(name)) {
     throw new HttpError(400, "Choose a different username.");
+  }
+  if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+    throw new HttpError(400, "Use only letters, numbers, spaces, _ or -.");
   }
 }
 
