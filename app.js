@@ -104,17 +104,23 @@ const SCORING = Object.freeze({
   B: 7,
   C: 1.25,
 });
+const SUPABASE_API_BASE_URL =
+  "https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api";
 
 function configuredApiBaseUrl() {
   const queryApi = new URLSearchParams(window.location.search).get("api");
   if (queryApi) {
     localStorage.setItem("rowEchelonApiBaseUrl", queryApi);
   }
+  const defaultApi = window.location.hostname === "localhost"
+    || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8787"
+    : SUPABASE_API_BASE_URL;
   return (
     window.ROW_ECHELON_API_BASE_URL
     || queryApi
     || localStorage.getItem("rowEchelonApiBaseUrl")
-    || "http://localhost:8787"
+    || defaultApi
   ).replace(/\/$/, "");
 }
 

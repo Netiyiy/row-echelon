@@ -25,13 +25,13 @@ class HttpError extends Error {
 }
 
 function secretKey() {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceKey) return serviceKey;
+
   const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
   if (secretKeys) {
     return JSON.parse(secretKeys).default as string;
   }
-
-  const legacyServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (legacyServiceKey) return legacyServiceKey;
 
   throw new Error("Missing Supabase secret key.");
 }
@@ -60,7 +60,6 @@ type DailyScoreRow = {
   best_level: number;
   last_level: number;
   updated_at: string;
-  player?: { id: string; name: string } | { id: string; name: string }[];
 };
 
 function json(data: unknown, status = 200) {
@@ -167,16 +166,15 @@ async function requirePlayer(request: Request) {
   return data as PlayerRow;
 }
 
-function playerName(row: DailyScoreRow) {
-  if (Array.isArray(row.player)) return row.player[0]?.name || "Player";
-  return row.player?.name || "Player";
-}
-
-function rankRows(rows: DailyScoreRow[], currentPlayerId: string | null) {
+function rankRows(
+  rows: DailyScoreRow[],
+  playersById: Map<string, string>,
+  currentPlayerId: string | null,
+) {
   return rows
     .map((row) => ({
       playerId: row.player_id,
-      name: playerName(row),
+      name: playersById.get(row.player_id) || "Player",
       solved: Number(row.solved) || 0,
       totalScore: Number(row.total_score) || 0,
       totalSteps: Number(row.total_steps) || 0,
@@ -217,14 +215,29 @@ async function leaderboardPayload({
       best_steps,
       best_level,
       last_level,
-      updated_at,
-      player:row_echelon_players(id,name)
+      updated_at
     `)
     .eq("score_date", date);
 
   if (error) throw error;
 
-  const ranked = rankRows((data || []) as DailyScoreRow[], currentPlayerId);
+  const rows = (data || []) as DailyScoreRow[];
+  const playerIds = [...new Set(rows.map((row) => row.player_id))];
+  const playersById = new Map<string, string>();
+
+  if (playerIds.length) {
+    const { data: players, error: playersError } = await supabase
+      .from("row_echelon_players")
+      .select("id,name")
+      .in("id", playerIds);
+
+    if (playersError) throw playersError;
+    for (const player of players || []) {
+      playersById.set(player.id, player.name);
+    }
+  }
+
+  const ranked = rankRows(rows, playersById, currentPlayerId);
   const leaderboard = ranked.slice(0, limit);
   const playerEntry = currentPlayerId
     ? ranked.find((entry) => entry.playerId === currentPlayerId) || null

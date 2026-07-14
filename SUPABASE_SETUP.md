@@ -13,10 +13,10 @@ This is the production backend for the Row Echelon website and future iOS app.
   - `GET /api/leaderboard`
   - `POST /api/complete`
 
-The deployed API base URL will look like:
+The deployed API base URL is:
 
 ```text
-https://YOUR_PROJECT_REF.functions.supabase.co/row-echelon-api
+https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api
 ```
 
 ## Create The Supabase Project
@@ -43,7 +43,7 @@ From the repo root:
 
 ```bash
 npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase link --project-ref fkoupqflxcwyofsbgjgw
 npx supabase db push
 npx supabase functions deploy row-echelon-api --no-verify-jwt
 ```
@@ -52,10 +52,10 @@ Supabase Edge Functions provide `SUPABASE_URL` and secret API keys as environmen
 
 ## Connect The Website
 
-Open the game once with:
+The public website now uses Supabase by default. If you ever need to force it manually, open:
 
 ```text
-https://netiyiy.github.io/row-echelon/?api=https://YOUR_PROJECT_REF.functions.supabase.co/row-echelon-api
+https://netiyiy.github.io/row-echelon/?api=https://fkoupqflxcwyofsbgjgw.functions.supabase.co/row-echelon-api
 ```
 
 The website saves that API URL in `localStorage`, so future visits use it automatically.
