@@ -31,9 +31,9 @@ Choose a username and start reducing.
 
 ## URLs
 
-- **Support URL:** https://github.com/Netiyiy/row-echelon/issues
-- **Privacy policy URL:** Replace with the deployed HTTPS address of `privacy.html`
-- **Marketing URL:** Optional; use the hosted Row Echelon website if desired
+- **Support URL:** https://netiyiy.github.io/row-echelon/support.html
+- **Privacy policy URL:** https://netiyiy.github.io/row-echelon/privacy.html
+- **Marketing URL:** https://netiyiy.github.io/row-echelon/
 
 ## App Review notes
 
