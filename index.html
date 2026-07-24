@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=60" />
+    <link rel="stylesheet" href="styles.css?v=61" />
   </head>
   <body>
     <section id="intro-screen" class="intro-screen" aria-label="Introduction to row reduction" hidden>
@@ -127,6 +127,9 @@
             PLAY OFFLINE
           </button>
           <p class="offline-copy">No timeout. Progress saves on this device.</p>
+          <button id="tutorial-button" class="tutorial-button" type="button">
+            HOW TO PLAY
+          </button>
           <p id="account-message" class="account-message" aria-live="polite"></p>
         </div>
       </section>
@@ -167,6 +170,27 @@
           <p id="offline-exit-message" class="account-message" aria-live="polite"></p>
         </div>
       </section>
+
+      <aside
+        id="tutorial-guide"
+        class="tutorial-guide"
+        aria-label="Interactive tutorial"
+        aria-live="polite"
+        hidden
+      >
+        <div class="tutorial-card">
+          <div class="tutorial-card-heading">
+            <p id="tutorial-progress" class="tutorial-progress">STEP 1 OF 10</p>
+            <button id="tutorial-exit" class="tutorial-exit" type="button" aria-label="Exit tutorial">
+              EXIT
+            </button>
+          </div>
+          <h2 id="tutorial-title">Three Moves. One Goal.</h2>
+          <p id="tutorial-copy" class="tutorial-copy"></p>
+          <p id="tutorial-action" class="tutorial-action"></p>
+          <button id="tutorial-next" class="tutorial-next" type="button">START</button>
+        </div>
+      </aside>
 
       <div id="play-view" class="play-view">
         <header class="hud">
@@ -261,12 +285,13 @@
       <div id="settings-menu" class="settings-menu" role="group" aria-label="Settings" hidden>
         <button id="sound-button" class="settings-action" type="button" aria-pressed="true">SOUND ON</button>
         <button id="replay-intro-button" class="settings-action" type="button">REPLAY INTRO</button>
+        <button id="settings-tutorial-button" class="settings-action" type="button">HOW TO PLAY</button>
         <button id="logout-button" class="logout-button" type="button">END SESSION</button>
         <p id="settings-message" class="settings-message" aria-live="polite"></p>
       </div>
-      <span class="version-label" aria-label="Version">v60</span>
+      <span class="version-label" aria-label="Version">v61</span>
     </main>
 
-    <script src="app.js?v=60" defer></script>
+    <script src="app.js?v=61" defer></script>
   </body>
 </html>

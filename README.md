@@ -36,6 +36,13 @@ minutes so long levels do not expire unexpectedly.
 On iPhone Safari, open the hosted URL, tap the Share button, then choose
 **Add to Home Screen**.
 
+## Tutorial
+
+Choose **How to Play** from the player screen or Settings to start the guided
+practice matrix. It teaches Swap, Add, and Scale with highlighted controls,
+exact fractions, and a complete RREF example. Tutorial actions do not affect
+the current level, score, timer, leaderboard, or saved progress.
+
 ## Audio
 
 The bundled audio is CC0. Source details are in

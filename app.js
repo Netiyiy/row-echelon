@@ -130,6 +130,95 @@ const INTRO_MATRIX_STEPS = Object.freeze([
     values: [[1, 0, 0, 2], [0, 1, 0, -1], [0, 0, 1, 3]],
   },
 ]);
+const TUTORIAL_MATRIX_VALUES = Object.freeze([
+  [0, 1, 0, 1],
+  [1, 0, 0, 2],
+  [2, 0, 2, 10],
+]);
+const TUTORIAL_STEPS = Object.freeze([
+  {
+    kind: "welcome",
+    title: "Three Moves. One Goal.",
+    copy: "Turn the left side of the matrix into the identity matrix. This practice run will not affect your score or saved progress.",
+    action: "You will use Swap, Add, and Scale once each.",
+  },
+  {
+    kind: "mode",
+    value: "swap",
+    title: "Put the Pivot First",
+    copy: "R1 starts with zero, while R2 starts with one. Swap them so the first pivot lands in the top-left.",
+    action: "Tap SWAP.",
+  },
+  {
+    kind: "row",
+    value: 0,
+    title: "Choose the First Row",
+    copy: "A swap needs two rows. Select the row currently at the top.",
+    action: "Tap R1.",
+  },
+  {
+    kind: "row",
+    value: 1,
+    title: "Choose Its New Position",
+    copy: "Now choose the row holding the leading one. The two rows will trade places.",
+    action: "Tap R2.",
+  },
+  {
+    kind: "mode",
+    value: "add",
+    title: "Clear the First Column",
+    copy: "R3 still begins with 2. Add a multiple of R1 to R3 to turn that entry into zero.",
+    action: "Tap ADD.",
+  },
+  {
+    kind: "factor",
+    value: "-2",
+    title: "Choose the Multiple",
+    copy: "We need 2 + (−2 × 1) = 0, so the multiple of the source row is −2.",
+    action: "Enter −2 in FACTOR.",
+  },
+  {
+    kind: "row",
+    value: 0,
+    title: "Choose the Source",
+    copy: "In Add mode, the first row you tap is the source—the row being multiplied.",
+    action: "Tap R1.",
+  },
+  {
+    kind: "row",
+    value: 2,
+    title: "Choose the Target",
+    copy: "The second row is the target. The game will perform R3 + (−2 × R1).",
+    action: "Tap R3.",
+  },
+  {
+    kind: "mode",
+    value: "scale",
+    title: "Make the Last Pivot One",
+    copy: "R3 now has a pivot of 2. Scaling divides the entire row by the same amount.",
+    action: "Tap SCALE.",
+  },
+  {
+    kind: "factor",
+    value: "1/2",
+    title: "Use an Exact Fraction",
+    copy: "Multiplying every entry in R3 by one-half changes the pivot from 2 to 1.",
+    action: "Enter 1/2 in FACTOR.",
+  },
+  {
+    kind: "row",
+    value: 2,
+    title: "Apply the Scale",
+    copy: "Scale acts immediately on the row you choose.",
+    action: "Tap R3.",
+  },
+  {
+    kind: "complete",
+    title: "RREF Achieved",
+    copy: "The left side is now the identity matrix. That is the goal of every puzzle.",
+    action: "Swap reorders rows. Add clears entries. Scale creates pivots.",
+  },
+]);
 const SCORING = Object.freeze({
   A: 300,
   P: 1.22,
@@ -581,6 +670,10 @@ const state = {
   progressSaveTimer: null,
   offlineExitOpen: false,
   offlineSavePending: false,
+  tutorialActive: false,
+  tutorialStep: 0,
+  tutorialMessage: "",
+  tutorialSnapshot: null,
 };
 
 function loadPlayerSession() {
@@ -629,6 +722,10 @@ function playingOffline() {
 
 function canPlay() {
   return signedIn() || playingOffline();
+}
+
+function canInteractWithGame() {
+  return canPlay() || state.tutorialActive;
 }
 
 function loadOfflineProgress() {
@@ -717,7 +814,7 @@ function currentSavedProgress() {
 }
 
 function persistGameProgress() {
-  if (!canPlay() || !state.matrix.length) return;
+  if (state.tutorialActive || !canPlay() || !state.matrix.length) return;
   const progress = currentSavedProgress();
   if (playingOffline()) {
     try {
@@ -993,6 +1090,7 @@ function resumeLevelTimer() {
     || state.isSolved
     || state.leaderboardVisible
     || state.introVisible
+    || state.tutorialActive
     || !canPlay()
   ) return;
   runLevelTimer();
@@ -1008,12 +1106,17 @@ function stopLevelTimer() {
 }
 
 function updateScoreLabels() {
+  if (state.tutorialActive) {
+    $("#current-score").textContent = "PRACTICE";
+    $("#timer-label").textContent = "GUIDED";
+    return;
+  }
   $("#current-score").textContent = `STEPS ${state.steps}`;
   updateTimerLabel(state.isSolved ? state.elapsedSeconds : currentElapsedSeconds());
 }
 
 function renderAccount() {
-  const isPlaying = canPlay();
+  const isPlaying = canPlay() || state.tutorialActive;
   $("#account-gate").hidden = isPlaying;
   $(".game-shell").classList.toggle("account-locked", !isPlaying);
   $("#player-label").textContent = signedIn()
@@ -1663,8 +1766,145 @@ async function submitCompletedLevel(scoreBreakdown) {
   }
 }
 
+function currentTutorialStep() {
+  return TUTORIAL_STEPS[state.tutorialStep] || TUTORIAL_STEPS.at(-1);
+}
+
+function tutorialExpects(kind, value) {
+  if (!state.tutorialActive) return true;
+  const step = currentTutorialStep();
+  if (step.kind !== kind) return false;
+  return value === undefined || step.value === value;
+}
+
+function captureTutorialSnapshot(shouldResumeTimer) {
+  return {
+    shouldResumeTimer,
+    level: state.level,
+    matrix: cloneMatrix(state.matrix),
+    originalMatrix: cloneMatrix(state.originalMatrix),
+    history: state.history.map(cloneMatrix),
+    mode: state.mode,
+    factor: state.factor.clone(),
+    selectedRow: state.selectedRow,
+    isSolved: state.isSolved,
+    steps: state.steps,
+    elapsedSeconds: state.elapsedSeconds,
+    resultScoreBreakdown: state.resultScoreBreakdown,
+    lastLeaderboardResult: state.lastLeaderboardResult,
+    leaderboardVisible: state.leaderboardVisible,
+    resultsStage: state.resultsStage,
+  };
+}
+
+function startTutorial() {
+  if (state.tutorialActive || state.introVisible) return;
+  audio.play("tap");
+  const shouldResumeTimer = Boolean(state.levelStartedAt);
+  pauseLevelTimer();
+  persistGameProgress();
+  state.resultAnimationToken += 1;
+  state.celebrationToken += 1;
+  state.tutorialSnapshot = captureTutorialSnapshot(shouldResumeTimer);
+  state.tutorialActive = true;
+  state.tutorialStep = 0;
+  state.tutorialMessage = "";
+  state.settingsOpen = false;
+  state.leaderboardVisible = false;
+  state.resultsStage = "score";
+  state.matrix = intMatrix(TUTORIAL_MATRIX_VALUES);
+  state.originalMatrix = cloneMatrix(state.matrix);
+  state.history = [];
+  state.mode = "add";
+  state.factor = fraction(1);
+  state.selectedRow = null;
+  state.isSolved = false;
+  state.steps = 0;
+  state.elapsedSeconds = 0;
+  resetSolutionReveal();
+  $("#sparkle-layer").replaceChildren();
+  render();
+  animateLevelEntry("tutorial");
+}
+
+function exitTutorial() {
+  if (!state.tutorialActive) return;
+  audio.play("tap");
+  const snapshot = state.tutorialSnapshot;
+  state.celebrationToken += 1;
+  state.resultAnimationToken += 1;
+  state.tutorialActive = false;
+  state.tutorialStep = 0;
+  state.tutorialMessage = "";
+  state.tutorialSnapshot = null;
+  document.body.classList.remove("tutorial-active");
+  $("#sparkle-layer").replaceChildren();
+  resetSolutionReveal();
+
+  if (snapshot) {
+    state.level = snapshot.level;
+    state.matrix = snapshot.matrix;
+    state.originalMatrix = snapshot.originalMatrix;
+    state.history = snapshot.history;
+    state.mode = snapshot.mode;
+    state.factor = snapshot.factor;
+    state.selectedRow = snapshot.selectedRow;
+    state.isSolved = snapshot.isSolved;
+    state.steps = snapshot.steps;
+    state.elapsedSeconds = snapshot.elapsedSeconds;
+    state.resultScoreBreakdown = snapshot.resultScoreBreakdown;
+    state.lastLeaderboardResult = snapshot.lastLeaderboardResult;
+    state.leaderboardVisible = snapshot.leaderboardVisible;
+    state.resultsStage = snapshot.resultsStage;
+  }
+
+  render();
+  animateLevelEntry("tutorial-exit");
+  if (snapshot?.shouldResumeTimer && canPlay() && !state.isSolved) {
+    runLevelTimer();
+  }
+}
+
+function advanceTutorial() {
+  if (!state.tutorialActive) return;
+  state.tutorialStep = Math.min(state.tutorialStep + 1, TUTORIAL_STEPS.length - 1);
+  state.tutorialMessage = "";
+  if (currentTutorialStep().kind === "complete") {
+    state.isSolved = true;
+    const token = ++state.celebrationToken;
+    audio.play("complete");
+    launchGameplayConfetti(token);
+  }
+}
+
+function renderTutorial() {
+  const guide = $("#tutorial-guide");
+  guide.hidden = !state.tutorialActive;
+  document.body.classList.toggle("tutorial-active", state.tutorialActive);
+  if (!state.tutorialActive) return;
+
+  const step = currentTutorialStep();
+  const actionableStep = Math.min(Math.max(state.tutorialStep, 1), 10);
+  $("#tutorial-progress").textContent = step.kind === "welcome"
+    ? "INTERACTIVE TUTORIAL"
+    : step.kind === "complete"
+      ? "TUTORIAL COMPLETE"
+      : `STEP ${actionableStep} OF 10`;
+  $("#tutorial-title").textContent = step.title;
+  $("#tutorial-copy").textContent = step.copy;
+  $("#tutorial-action").textContent = state.tutorialMessage || step.action;
+
+  const nextButton = $("#tutorial-next");
+  nextButton.hidden = step.kind !== "welcome" && step.kind !== "complete";
+  nextButton.textContent = step.kind === "complete" ? "RETURN TO GAME" : "START";
+  guide.dataset.placement = step.kind === "mode" || step.kind === "factor"
+    ? "top"
+    : "bottom";
+}
+
 function renderMatrix() {
   const matrix = $("#matrix");
+  const tutorialStep = currentTutorialStep();
   matrix.replaceChildren(
     ...state.matrix.map((row, rowIndex) => {
       const rowButton = document.createElement("button");
@@ -1672,6 +1912,12 @@ function renderMatrix() {
       rowButton.className = `matrix-row${state.selectedRow === rowIndex ? " selected" : ""}`;
       rowButton.dataset.row = String(rowIndex);
       rowButton.setAttribute("aria-label", `Row ${rowIndex + 1}: ${row.join(", ")}`);
+      if (state.tutorialActive) {
+        const isTarget = tutorialStep.kind === "row" && tutorialStep.value === rowIndex;
+        rowButton.disabled = !isTarget;
+        rowButton.classList.toggle("tutorial-target", isTarget);
+        rowButton.dataset.tutorialLabel = `R${rowIndex + 1}`;
+      }
 
       for (const value of row) {
         const cell = document.createElement("span");
@@ -1800,8 +2046,14 @@ function animateGameplayChange({ kind, source = null, target = null, previousMat
 }
 
 function renderControls() {
+  const tutorialStep = currentTutorialStep();
   $$(".operation-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
+    const isTutorialTarget = state.tutorialActive
+      && tutorialStep.kind === "mode"
+      && tutorialStep.value === button.dataset.mode;
+    button.classList.toggle("tutorial-target", isTutorialTarget);
+    button.disabled = state.tutorialActive && !isTutorialTarget;
   });
   const factorInput = $("#factor-input");
   if (document.activeElement !== factorInput) {
@@ -1809,17 +2061,24 @@ function renderControls() {
     factorInput.classList.remove("invalid");
     factorInput.removeAttribute("aria-invalid");
   }
+  const factorIsTarget = state.tutorialActive && tutorialStep.kind === "factor";
+  factorInput.disabled = state.tutorialActive && !factorIsTarget;
+  factorInput.classList.toggle("tutorial-target", factorIsTarget);
+  $("#reset-button").disabled = state.tutorialActive;
 }
 
 function render() {
-  $("#level-label").textContent = `LEVEL ${state.level}`;
-  $("#level-cleared").textContent = state.isSolved ? "LEVEL CLEARED" : "";
+  $("#level-label").textContent = state.tutorialActive ? "TUTORIAL" : `LEVEL ${state.level}`;
+  $("#level-cleared").textContent = state.isSolved
+    ? state.tutorialActive ? "MATRIX COMPLETE" : "LEVEL CLEARED"
+    : "";
   $(".game-shell").classList.toggle("celebrating", state.isSolved);
   renderMatrix();
   renderControls();
   renderAccount();
   renderSettings();
   renderLeaderboard();
+  renderTutorial();
   updateScoreLabels();
   persistGameProgress();
 }
@@ -1858,14 +2117,16 @@ function applyChange(change, animation = {}) {
   state.steps += 1;
   state.selectedRow = null;
   state.isSolved = isGameSolved(state.matrix);
+  if (state.tutorialActive) advanceTutorial();
   render();
   animateGameplayChange({ ...animation, previousMatrix });
-  if (state.isSolved) completeLevel();
+  if (state.isSolved && !state.tutorialActive) completeLevel();
 }
 
 function chooseRow(row) {
   if (state.isSolved) return;
-  if (!canPlay()) {
+  if (state.tutorialActive && !tutorialExpects("row", row)) return;
+  if (!canInteractWithGame()) {
     state.accountMessage = "Create a player or choose Play Offline first.";
     renderAccount();
     audio.play("tap");
@@ -1882,6 +2143,7 @@ function chooseRow(row) {
   if (state.selectedRow === null) {
     audio.play("row");
     state.selectedRow = row;
+    if (state.tutorialActive) advanceTutorial();
     render();
     return;
   }
@@ -1907,7 +2169,7 @@ function chooseRow(row) {
 }
 
 function resetLevel() {
-  if (state.isSolved) return;
+  if (state.isSolved || state.tutorialActive) return;
   audio.play("reset");
   clearLevelTimer();
   state.matrix = cloneMatrix(state.originalMatrix);
@@ -2197,6 +2459,16 @@ function updateFactorFromInput({ restoreInvalid = false } = {}) {
   input.removeAttribute("aria-invalid");
   renderMatrix();
   restartAnimationClass(input, "factor-accepted", 420);
+  if (state.tutorialActive) {
+    const expected = currentTutorialStep();
+    if (expected.kind === "factor" && value.toString() === expected.value) {
+      advanceTutorial();
+      render();
+    } else if (expected.kind === "factor") {
+      state.tutorialMessage = `Almost—enter ${expected.value}.`;
+      renderTutorial();
+    }
+  }
   return true;
 }
 
@@ -2686,9 +2958,11 @@ function showIntro({ autoplay = false, audioUnlock = null } = {}) {
 $$(".operation-button").forEach((button) => {
   button.addEventListener("click", () => {
     if (state.isSolved) return;
+    if (state.tutorialActive && !tutorialExpects("mode", button.dataset.mode)) return;
     audio.play("tap");
     state.mode = button.dataset.mode;
     state.selectedRow = null;
+    if (state.tutorialActive) advanceTutorial();
     render();
     restartAnimationClass(button, "mode-activated", 440);
   });
@@ -2696,6 +2970,7 @@ $$(".operation-button").forEach((button) => {
 
 $("#create-account-button").addEventListener("click", createAccount);
 $("#play-offline-button").addEventListener("click", startOfflinePlay);
+$("#tutorial-button").addEventListener("click", startTutorial);
 $("#offline-save-account").addEventListener("click", saveOfflineProgressToAccount);
 $("#offline-discard-progress").addEventListener("click", discardOfflineProgress);
 $("#offline-cancel-exit").addEventListener("click", () => closeOfflineExitDialog());
@@ -2731,7 +3006,21 @@ $("#replay-intro-button").addEventListener("click", () => {
   const audioUnlock = audio.resumeFromUserGesture();
   showIntro({ autoplay: true, audioUnlock });
 });
+$("#settings-tutorial-button").addEventListener("click", startTutorial);
 $("#logout-button").addEventListener("click", logoutPlayer);
+$("#tutorial-exit").addEventListener("click", exitTutorial);
+$("#tutorial-next").addEventListener("click", () => {
+  if (!state.tutorialActive) return;
+  if (currentTutorialStep().kind === "complete") {
+    exitTutorial();
+    return;
+  }
+  if (currentTutorialStep().kind === "welcome") {
+    audio.play("tap");
+    advanceTutorial();
+    render();
+  }
+});
 $("#intro-begin").addEventListener("click", (event) => {
   event.stopPropagation();
   const audioUnlock = audio.resumeFromUserGesture();
@@ -2766,6 +3055,10 @@ document.addEventListener("click", () => {
   renderSettings();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.tutorialActive) {
+    exitTutorial();
+    return;
+  }
   if (event.key === "Escape" && state.offlineExitOpen) {
     closeOfflineExitDialog();
     return;

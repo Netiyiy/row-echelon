@@ -811,7 +811,8 @@ body.intro-active .game-shell {
 
 .player-name-input,
 .create-account-button,
-.play-offline-button {
+.play-offline-button,
+.tutorial-button {
   width: 100%;
   min-height: 42px;
   margin-top: 12px;
@@ -869,6 +870,18 @@ body.intro-active .game-shell {
 }
 
 .play-offline-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.tutorial-button {
+  margin-top: 13px;
+  border-color: rgb(199 209 140 / 55%);
+  color: var(--success);
+  background: rgb(74 48 38 / 58%);
+  letter-spacing: 0.08em;
+}
+
+.tutorial-button:active {
   transform: translateY(1px) scale(0.99);
 }
 
@@ -945,6 +958,167 @@ body.intro-active .game-shell {
 .offline-exit-card button:disabled,
 .offline-exit-card input:disabled {
   opacity: 0.52;
+}
+
+.tutorial-guide {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  position: absolute;
+  left: 50%;
+  width: min(calc(100vw - 32px), 390px);
+  padding: 16px 17px 15px;
+  border: 1px solid rgb(199 209 140 / 68%);
+  border-radius: 19px;
+  color: var(--cream);
+  background:
+    radial-gradient(circle at 88% 10%, rgb(199 209 140 / 13%), transparent 34%),
+    rgb(74 48 38 / 97%);
+  box-shadow:
+    0 22px 48px rgb(20 12 9 / 42%),
+    0 0 0 1px rgb(250 230 191 / 5%),
+    inset 0 1px 0 rgb(250 230 191 / 8%);
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.tutorial-guide[data-placement="top"] .tutorial-card {
+  top: calc(env(safe-area-inset-top) + 52px);
+  animation: tutorial-card-enter-top 480ms cubic-bezier(0.12, 1.18, 0.24, 1) both;
+}
+
+.tutorial-guide[data-placement="bottom"] .tutorial-card {
+  bottom: calc(env(safe-area-inset-bottom) + 54px);
+  animation: tutorial-card-enter-bottom 480ms cubic-bezier(0.12, 1.18, 0.24, 1) both;
+}
+
+.tutorial-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.tutorial-progress {
+  margin: 0;
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.tutorial-exit {
+  min-width: 48px;
+  min-height: 25px;
+  padding: 0 9px;
+  border: 1px solid rgb(199 163 125 / 42%);
+  border-radius: 8px;
+  color: var(--muted-cream);
+  background: rgb(92 61 48 / 68%);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.tutorial-card h2 {
+  margin: 9px 0 0;
+  font-size: 22px;
+  letter-spacing: -0.035em;
+}
+
+.tutorial-copy {
+  margin: 7px 0 0;
+  color: var(--muted-cream);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.tutorial-action {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(224 158 92 / 38%);
+  border-radius: 10px;
+  color: var(--cream);
+  background: rgb(110 74 58 / 66%);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.tutorial-next {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 11px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--cocoa);
+  background: var(--accent);
+  box-shadow: inset 0 -3px 0 rgb(74 48 38 / 20%);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.tutorial-next:active,
+.tutorial-exit:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+body.tutorial-active .settings-button,
+body.tutorial-active .settings-menu,
+body.tutorial-active .version-label,
+body.tutorial-active .reset-button {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+body.tutorial-active .matrix-row {
+  overflow: visible;
+  padding-left: 23px;
+}
+
+body.tutorial-active .matrix-row::before {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  color: rgb(199 163 125 / 78%);
+  content: attr(data-tutorial-label);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+body.tutorial-active .matrix-row:disabled,
+body.tutorial-active .operation-button:disabled,
+body.tutorial-active .factor-input:disabled {
+  opacity: 0.38;
+  filter: saturate(0.7);
+}
+
+body.tutorial-active .matrix-row.selected:disabled {
+  opacity: 0.78;
+  filter: none;
+}
+
+body.tutorial-active .tutorial-target {
+  z-index: 42;
+  opacity: 1 !important;
+  filter: none !important;
+  outline: 2px solid rgb(199 209 140 / 72%);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 6px rgb(199 209 140 / 9%),
+    0 0 24px rgb(199 209 140 / 38%);
+  animation: tutorial-target-pulse 1.25s ease-in-out infinite;
+}
+
+.tutorial-target.matrix-row::before {
+  color: var(--success);
 }
 
 .top-glow {
@@ -2388,6 +2562,56 @@ h1 {
       )
       scale(1)
       rotate(var(--confetti-rotate));
+  }
+}
+
+@keyframes tutorial-card-enter-top {
+  0% {
+    opacity: 0;
+    filter: blur(7px);
+    transform: translate(-50%, -16px) scale(0.94);
+  }
+  68% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate(-50%, 3px) scale(1.012);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes tutorial-card-enter-bottom {
+  0% {
+    opacity: 0;
+    filter: blur(7px);
+    transform: translate(-50%, 18px) scale(0.94);
+  }
+  68% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate(-50%, -3px) scale(1.012);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes tutorial-target-pulse {
+  0%,
+  100% {
+    outline-color: rgb(199 209 140 / 54%);
+    box-shadow:
+      0 0 0 5px rgb(199 209 140 / 7%),
+      0 0 18px rgb(199 209 140 / 28%);
+  }
+  50% {
+    outline-color: rgb(199 209 140 / 92%);
+    box-shadow:
+      0 0 0 8px rgb(199 209 140 / 13%),
+      0 0 30px rgb(199 209 140 / 52%);
   }
 }
 
